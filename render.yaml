@@ -3,20 +3,23 @@ services:
     name: sahachara-ayurveda-backend
     runtime: node
     plan: free
-    buildCommand: npm install && npx prisma generate
+    buildCommand: npm install --include=dev && npx prisma generate
     startCommand: npm run start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
       - key: CLIENT_URL
         value: https://os.sahachara.com
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: INITIAL_SUPER_ADMIN_PASSWORD
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: SUPABASE_ANON_KEY
-        sync: false
-      - key: DATABASE_URL
         sync: false
