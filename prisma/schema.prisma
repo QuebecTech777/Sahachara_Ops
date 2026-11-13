@@ -1,0 +1,1272 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  passwordHash      String?
+  name              String
+  role              String    @default("Doctor") // SUPER_ADMIN, ADMIN, DOCTOR, VAIDYA, RECEPTIONIST, PHARMACIST, ACCOUNTANT
+  status            String    @default("active") // active, pending_activation, inactive, suspended, archived
+  activationPin     String?
+  activationPinHash String?
+  pinExpiresAt      DateTime?
+  pinAttempts       Int       @default(0)
+  department        String    @default("Kayachikitsa (Internal Medicine)")
+  licenseNumber     String?
+  mrn               String?   // For patient logins
+  isSuspended       Boolean   @default(false)
+  suspendedAt       DateTime?
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  appointments      Appointment[] @relation("PractitionerAppointments")
+  encounters        ClinicalEncounter[] @relation("PractitionerEncounters")
+  staffMember       StaffMember?
+
+  @@map("users")
+}
+
+model Patient {
+  id                       String    @id @default(uuid())
+  mrn                      String    @unique
+  firstName                String
+  middleName               String?
+  lastName                 String
+  dob                      String?
+  age                      Int?
+  gender                   String    // Male, Female, Other, Undisclosed
+  bloodGroup               String?
+  preferredLanguage        String?
+  photoUrl                 String?
+  status                   String    @default("active") // active, inactive, archived
+  admissionStatus          String?   // outpatient, inpatient, er, discharged, unassigned
+
+  // Contact Details
+  phone                    String
+  secondaryPhone           String?
+  email                    String?
+  communicationPreference  String?   // sms, whatsapp, email, phone, none
+  contactLanguage          String?
+
+  // Address Information
+  address                  String?
+  addressLine1             String?
+  addressLine2             String?
+  locality                 String?
+  city                     String?
+  district                 String?
+  state                    String?
+  postalCode               String?
+  country                  String?
+
+  // Emergency Contact
+  emergencyContact         Json?
+  emergencyContactName     String?
+  emergencyContactRelation String?
+  emergencyContactPhone    String?
+  emergencyContactAltPhone String?
+
+  // Medical Background & Clinical Records
+  allergyStatus            String    @default("not_recorded") // not_recorded, none_confirmed, known_allergies
+  allergies                Json?
+  medicalHistoryStatus     String    @default("not_recorded") // not_recorded, reviewed, documented
+  chronicConditions        Json?
+  pastMedicalHistory       String?
+  pastSurgicalHistory      String?
+  familyHistory            String?
+  currentMedications       Json?
+  pastDiagnoses            Json?
+  medicalHistoryNotes      String?
+  clinicalNotes            String?
+
+  // Clinical Ward / Bed Allocation
+  currentWard              String?
+  currentBed               String?
+  assignedDoctorId         String?
+  assignedDoctorName       String?
+  admissionDate            DateTime  @default(now())
+  dischargeDate            DateTime?
+
+  // Ayurveda & Insurance Profiles
+  insurance                Json?
+  doshaProfile             Json?
+  latestVitals             Json?
+
+  // Administrative Lifecycle & Archival Tracking
+  isRegistered             Boolean   @default(true)
+  registeredById           String?
+  registeredByName         String?
+  archivedAt               DateTime?
+  archivedById             String?
+  archivedByName           String?
+  archivedReason           String?
+  deletedAt                DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  // Referential Integrity Relationships
+  appointments             Appointment[]
+  consultations            Consultation[]
+  treatmentPlans           TreatmentPlan[]
+  panchakarmaCourses       PanchakarmaCourse[]
+  prescriptions            Prescription[]
+  therapySessions          TherapySession[]
+  labOrders                LabOrder[]
+  invoices                 Invoice[]
+  payments                 Payment[]
+  refundRequests           RefundRequest[]
+  encounters               ClinicalEncounter[]
+  vitals                   ClinicalVitals[]
+  assessments              ClinicalAssessment[]
+  diagnoses                ClinicalDiagnosis[]
+  prakritiAssessments      PrakritiAssessment[]
+  vikritiAssessments       VikritiAssessment[]
+  doshaEvaluations         DoshaEvaluation[]
+  panchakarmaReferrals     PanchakarmaReferral[]
+
+  @@index([mrn])
+  @@index([phone])
+  @@index([lastName, firstName])
+  @@index([status])
+  @@index([createdAt])
+  @@map("patients")
+}
+
+model Appointment {
+  id                    String    @id @default(uuid())
+  appointmentNumber     String?   @unique
+  patientId             String?
+  patient               Patient?  @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName           String
+  patientMrn            String
+  patientPhone          String    @default("+91 98450 00000")
+  patientEmail          String?   @default("")
+
+  // Practitioner Assignment
+  practitionerId        String?
+  practitioner          User?     @relation("PractitionerAppointments", fields: [practitionerId], references: [id], onDelete: Restrict)
+  practitionerName      String?
+  practitionerRole      String?   // 'DOCTOR' | 'VAIDYA'
+  doctorId              String?
+  doctorName            String
+  department            String    @default("Kayachikitsa (Internal Medicine)")
+
+  // Scheduling details
+  dateTime              DateTime
+  appointmentDate       DateTime?
+  timeSlot              String
+  durationMinutes       Int?
+  scheduledStartTime    String?
+  scheduledEndTime      String?
+
+  // Type & Status Lifecycle
+  type                  String    @default("Ayurvedic Initial Consultation")
+  status                String    @default("scheduled")
+  bookingSource         String    @default("reception_scheduled") // reception_scheduled, walk_in, phone, online
+
+  // Clinical & Reception notes
+  reasonForVisit        String?
+  notes                 String?   @default("")
+  receptionNotes        String?
+  cancellationReason    String?
+
+  // Check-in and Queue Management
+  checkInTime           DateTime?
+  queuePosition         Int?
+  priority              String    @default("normal") // normal, priority, urgent
+  priorityReason        String?
+  consultationStartTime DateTime?
+  completedAt           DateTime?
+
+  // Emergency Escalation & Clinical Triage Governance
+  isEscalated                   Boolean   @default(false)
+  escalationStatus              String?   // 'escalated', 'acknowledged', 'resolved'
+  escalatedAt                   DateTime?
+  escalatedById                 String?
+  escalatedByName               String?
+  escalationReason              String?
+  escalationAcknowledgedAt      DateTime?
+  escalationAcknowledgedById    String?
+  escalationAcknowledgedByName  String?
+  escalationResolvedAt          DateTime?
+  escalationResolvedById        String?
+  escalationResolvedByName      String?
+  escalationResolutionNotes     String?
+  clinicalTriageAt              DateTime?
+  clinicalTriageById            String?
+  clinicalTriageRole            String?
+  clinicalDocumentationCompleted Boolean  @default(false)
+
+  encounters                    ClinicalEncounter[]
+
+  // Rescheduling Traceability
+  rescheduledFromId     String?
+  reschedulingHistory   Json?
+
+  // Attribution
+  createdById           String?
+  createdByName         String?
+  updatedById           String?
+  updatedByName         String?
+
+  // Notifications
+  reminderSent          Boolean   @default(false)
+  reminderChannel       String?
+  reminderSentAt        DateTime?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([patientId])
+  @@index([practitionerId])
+  @@index([appointmentNumber])
+  @@index([status])
+  @@index([appointmentDate])
+  @@index([dateTime])
+  @@index([practitionerRole])
+  @@index([queuePosition])
+  @@map("appointments")
+}
+
+model Consultation {
+  id                        String    @id @default(uuid())
+  consultationNumber        String    @unique
+  patientId                 String?
+  patient                   Patient?  @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName               String
+  patientMrn                String
+  doctorId                  String?
+  doctorName                String
+  appointmentId             String?
+  dateTime                  DateTime  @default(now())
+  chiefComplaint            String
+  duration                  String    @default("40 minutes")
+  presentIllness            String?   @default("")
+  vitals                    Json?
+  ayurvedicAssessment       Json
+  classicalDiagnosis        String
+  westernCorrelation        String?
+  treatmentRecommendations  String
+  recommendedTherapies      Json?
+  prescriptions             Json?
+  status                    String    @default("completed")
+  clinicalNotes             String?
+  completedAt               DateTime  @default(now())
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@map("consultations")
+}
+
+model TreatmentPlan {
+  id                String   @id @default(uuid())
+  planNumber        String   @unique
+  encounterId       String?
+  encounter         ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  patientId         String?
+  patient           Patient? @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName       String
+  patientMrn        String
+  doctorId          String?
+  doctorName        String
+  practitionerRole  String?  @default("VAIDYA")
+  assignedTherapist String
+  therapyType       String
+  clinicalObjective String
+  oilOrFormulation  String
+  totalSessions     Int      @default(7)
+  completedSessions Int      @default(0)
+  frequency         String   @default("Daily")
+  startDate         String
+  endDate           String
+  roomNumber        String   @default("Therapy Suite 01")
+  status            String   @default("active") // active, completed, paused
+  instructions      String?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  sessions          TherapySession[]
+
+  @@map("treatment_plans")
+}
+
+model PanchakarmaCourse {
+  id                  String   @id @default(uuid())
+  courseNumber        String   @unique
+  referralId          String?  @unique
+  referral            PanchakarmaReferral? @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  patientId           String?
+  patient             Patient? @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName         String
+  patientMrn          String
+  vaidyaName          String
+  responsibleVaidyaId String?
+  responsibleVaidya   StaffMember? @relation("ResponsibleVaidyaCourses", fields: [responsibleVaidyaId], references: [id], onDelete: SetNull)
+  protocol            String
+  currentPhase        String   @default("PURVAKARMA")
+  startDate           String
+  expectedEndDate     String
+  startDateActual     DateTime?
+  completedAt         DateTime?
+  pausedAt            DateTime?
+  pauseReason         String?
+  terminatedAt        DateTime?
+  terminationReason   String?
+  totalDays           Int      @default(14)
+  completedDays       Int      @default(0)
+  dietaryPrescription String
+  status              String   @default("Active")
+  billingMode         PanchakarmaBillingMode @default(PER_SESSION)
+  packageTariffId     String?
+  packageTariff       HospitalTariff? @relation("PackageTariffCourses", fields: [packageTariffId], references: [id], onDelete: SetNull)
+  packageInvoiceId    String?
+  packageInvoice      Invoice? @relation("PackageInvoiceCourses", fields: [packageInvoiceId], references: [id], onDelete: SetNull)
+  isPackageBilled     Boolean  @default(false)
+  dailySessions       Json?
+  dischargeNotes      String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sessions            TherapySession[]
+  phaseTransitions    PanchakarmaPhaseTransition[]
+
+  @@map("panchakarma_courses")
+}
+
+model Prescription {
+  id                          String    @id @default(uuid())
+  rxNumber                    String    @unique
+  encounterId                 String?
+  encounter                   ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  patientId                   String?
+  patient                     Patient?  @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName                 String
+  mrn                         String
+  doctorId                    String?
+  doctorName                  String
+  prescribingPractitionerRole String?   @default("DOCTOR")
+  datePrescribed              DateTime  @default(now())
+  medicationId                String?
+  medicationName              String
+  dosage                      String
+  frequency                   String
+  route                       String    @default("Oral")
+  duration                    String
+  quantity                    Int       @default(1)
+  instructions                String?
+  amendmentHistory            Json?
+  status                      String    @default("pending") // pending, dispensed, cancelled
+  dispensingStatus            String    @default("pending") // pending, partially_dispensed, fully_dispensed, cancelled
+  dispensedQuantity           Int       @default(0)
+  remainingQuantity           Int       @default(1)
+  pharmacyNotes               String?
+  dispensedAt                 DateTime?
+  dispensedBy                 String?
+  dispensedById               String?
+  dispenseHistory             Json?
+  dispensingRecords           DispensingRecord[]
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  @@map("prescriptions")
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([status])
+}
+
+model MedicationStock {
+  id               String   @id @default(uuid())
+  drugName         String
+  genericName      String
+  category         String
+  form             String
+  strength         String?
+  stockQuantity    Int      @default(0)
+  unit             String   @default("bottles")
+  minThreshold     Int      @default(20)
+  reorderThreshold Int?
+  manufacturer     String?
+  batchNumber      String
+  expiryDate       String
+  storageInfo      String?
+  unitPrice        Decimal? @db.Decimal(12, 2)
+  isActive         Boolean  @default(true)
+  status           String   @default("in_stock")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("medication_stock")
+  @@index([drugName])
+  @@index([batchNumber])
+  @@index([expiryDate])
+}
+
+model StockMovement {
+  id                String   @id @default(uuid())
+  timestamp         DateTime @default(now())
+  medicineId        String?
+  medicineName      String
+  batchNumber       String
+  type              String   // Dispense, Receipt, Correction, Audit Adjustment
+  quantityDelta     Int
+  remainingQuantity Int
+  actor             String
+  actorId           String?
+  actorRole         String?
+  referenceNumber   String?
+  reason            String?  // Mandatory for adjustments
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  @@map("stock_movements")
+  @@index([medicineId])
+  @@index([batchNumber])
+  @@index([timestamp])
+}
+
+model DispensingRecord {
+  id                 String        @id @default(uuid())
+  dispenseNumber     String        @unique
+  prescriptionId     String
+  prescription       Prescription  @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  encounterId        String?
+  patientId          String?
+  patientName        String
+  mrn                String
+  medicationStockId  String?
+  drugName           String
+  batchNumber        String
+  expiryDate         String?
+  quantityDispensed  Int
+  billedQuantity     Int           @default(0)
+  isBilled           Boolean       @default(false)
+  billingInvoiceId   String?
+  idempotencyKey     String?
+  dispensedAt        DateTime      @default(now())
+  dispensedById      String
+  dispensedByName    String
+  dispensedByRole    String        @default("PHARMACIST")
+  pharmacyNotes      String?
+  createdAt          DateTime      @default(now())
+
+  @@map("dispensing_records")
+  @@index([prescriptionId])
+  @@index([batchNumber])
+  @@index([dispensedAt])
+  @@index([idempotencyKey])
+}
+
+model DispensingIdempotency {
+  id              String   @id @default(uuid())
+  idempotencyKey  String   @unique
+  prescriptionId  String
+  payloadHash     String
+  responsePayload Json
+  createdAt       DateTime @default(now())
+
+  @@map("dispensing_idempotency")
+  @@index([prescriptionId])
+}
+
+model LabOrder {
+  id                       String    @id @default(uuid())
+  orderNumber              String    @unique
+  encounterId              String?
+  encounter                ClinicalEncounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  patientId                String?
+  patient                  Patient?  @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName              String
+  mrn                      String
+  testType                 String
+  priority                 String    @default("Routine")
+  orderingDoctor           String
+  orderingPractitionerId   String?
+  orderingPractitionerRole String?   @default("DOCTOR")
+  clinicalIndication       String?
+  orderedAt                DateTime  @default(now())
+  sampleCollectedAt        DateTime?
+  sampleCollectedBy        String?
+  status                   String    @default("ordered") // ordered, sample_collected, processing, result_available, reviewed, cancelled
+  resultValue              String?
+  normalRange              String?
+  isAbnormal               Boolean   @default(false)
+  resultTimestamp          DateTime?
+  resultAttribution        String?
+  resultAttributionId      String?
+  reviewedAt               DateTime?
+  reviewedById             String?
+  reviewedByName           String?
+  reviewNotes              String?
+  labNotes                 String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@map("lab_orders")
+}
+
+model Invoice {
+  id                   String              @id @default(uuid())
+  invoiceNumber        String              @unique
+  patientId            String?
+  patient              Patient?            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName          String
+  mrn                  String
+  status               String              @default("draft") // draft, issued, partially_paid, paid, voided, cancelled
+  issuedAt             DateTime?
+  issuedById           String?
+  issuedByName         String?
+  createdById          String?
+  createdByName        String?
+  dueDate              DateTime?
+  currency             String              @default("INR")
+  notes                String?
+  admissionDate        DateTime            @default(now())
+  dischargeDate        DateTime?
+  items                Json
+  subtotal             Decimal             @default(0) @db.Decimal(12, 2)
+  insuranceCovered     Decimal             @default(0) @db.Decimal(12, 2)
+  copayPatient         Decimal             @default(0) @db.Decimal(12, 2)
+  totalAmount          Decimal             @default(0) @db.Decimal(12, 2)
+  paidAmount           Decimal             @default(0) @db.Decimal(12, 2)
+  balance              Decimal             @default(0) @db.Decimal(12, 2)
+  paymentStatus        String              @default("unpaid") // paid, unpaid, partially_paid
+  insuranceClaimStatus String              @default("pending")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  allocations          PaymentAllocation[]
+  refundRequests       RefundRequest[]
+  therapySessions      TherapySession[]
+  packageCourses       PanchakarmaCourse[] @relation("PackageInvoiceCourses")
+
+  @@map("invoices")
+  @@index([patientId])
+  @@index([mrn])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Payment {
+  id                 String              @id @default(uuid())
+  paymentNumber      String              @unique
+  patientId          String?
+  patient            Patient?            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName        String
+  mrn                String
+  amount             Decimal             @db.Decimal(12, 2)
+  unallocatedAmount  Decimal             @db.Decimal(12, 2)
+  paymentDate        DateTime            @default(now())
+  paymentMethod      String              // Cash, UPI, Bank Transfer, Card, Other
+  referenceNumber    String?
+  notes              String?
+  status             String              @default("unallocated") // unallocated, partially_allocated, fully_allocated, refunded, partially_refunded
+  recordedById       String
+  recordedByName     String
+  recordedByRole     String              @default("ACCOUNTANT")
+  idempotencyKey     String?             @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  allocations        PaymentAllocation[]
+  refundRequests     RefundRequest[]
+  refundLedgerEntries RefundLedgerEntry[]
+
+  @@map("payments")
+  @@index([patientId])
+  @@index([mrn])
+  @@index([paymentDate])
+  @@index([status])
+}
+
+model PaymentAllocation {
+  id              String    @id @default(uuid())
+  paymentId       String
+  payment         Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId       String
+  invoice         Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  amount          Decimal   @db.Decimal(12, 2)
+  allocatedAt     DateTime  @default(now())
+  allocatedById   String
+  allocatedByName String
+  allocatedByRole String    @default("ACCOUNTANT")
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  @@map("payment_allocations")
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@index([allocatedAt])
+}
+
+model RefundRequest {
+  id                 String    @id @default(uuid())
+  requestNumber      String    @unique
+  type               String    // refund, credit_adjustment, invoice_void
+  paymentId          String?
+  payment            Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  invoiceId          String?
+  invoice            Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  patientId          String?
+  patient            Patient?  @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  patientName        String
+  mrn                String
+  amount             Decimal   @db.Decimal(12, 2)
+  reason             String
+  status             String    @default("pending") // pending, approved, rejected, completed
+  requestedById      String
+  requestedByName    String
+  requestedByRole    String
+  requestedAt        DateTime  @default(now())
+  approvedById       String?
+  approvedByName     String?
+  approvedByRole     String?
+  approvedAt         DateTime?
+  approvalNotes      String?
+  rejectedById       String?
+  rejectedByName     String?
+  rejectedAt         DateTime?
+  rejectionReason    String?
+  externalReference  String?
+  executedById       String?
+  executedByName     String?
+  executedByRole     String?
+  executedAt         DateTime?
+  executionNotes     String?
+  refundMethod       String?
+  refundLedgerEntry  RefundLedgerEntry?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("refund_requests")
+  @@index([patientId])
+  @@index([invoiceId])
+  @@index([paymentId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+model RefundLedgerEntry {
+  id                String        @id @default(uuid())
+  entryNumber       String        @unique // RLE-YYYY-XXXXX
+  refundRequestId   String        @unique
+  refundRequest     RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
+  paymentId         String
+  payment           Payment       @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  patientId         String?
+  patientName       String
+  mrn               String
+  amount            Decimal       @db.Decimal(12, 2)
+  refundMethod      String        // Cash, UPI, Bank Transfer, Card
+  externalReference String?
+  executedById      String
+  executedByName    String
+  executedByRole    String
+  executedAt        DateTime      @default(now())
+  notes             String?
+  createdAt         DateTime      @default(now())
+
+  @@map("refund_ledger_entries")
+  @@index([refundRequestId])
+  @@index([paymentId])
+  @@index([patientId])
+  @@index([executedAt])
+}
+
+model FinancialIdempotency {
+  id              String   @id @default(uuid())
+  idempotencyKey  String   @unique
+  operation       String   // e.g. "record_payment", "allocate_payment", "issue_invoice", "request_refund"
+  actorId         String
+  payloadHash     String
+  responsePayload Json
+  createdAt       DateTime @default(now())
+
+  @@map("financial_idempotency")
+  @@index([operation])
+  @@index([actorId])
+}
+
+model StaffMember {
+  id                      String    @id @default(uuid())
+  employeeId              String    @unique // STF-YYYY-XXXXX
+  name                    String
+  role                    String
+  designation             String
+  department              String
+  email                   String    @unique
+  phone                   String
+  licenseNumber           String?
+  status                  String    @default("pending_activation") // on_duty, active, on_leave, inactive, pending_activation, suspended, archived
+  shift                   String?
+  qualification           String?
+  joiningDate             String?
+  dateOfJoining           DateTime?
+  address                 String?
+  emergencyContactName    String?
+  emergencyContactPhone   String?
+  employmentType          String?   // Full-Time, Part-Time, Consultant, Visiting, Contract
+  reportingTo             String?
+  discipline              String?   // Ayurveda, Modern Medicine, Pharmacy, Administration, Finance, Front Desk
+  specialty               String?
+  userId                  String?   @unique
+  user                    User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  activationPin           String?
+  activationPinHash       String?
+  pinExpiresAt            DateTime?
+  pinAttempts             Int       @default(0)
+  isSuspended             Boolean   @default(false)
+  suspendedAt             DateTime?
+  suspendedById           String?
+  suspendedByName         String?
+  suspendedReason         String?
+  archivedAt              DateTime?
+  archivedById            String?
+  archivedByName          String?
+  archivedReason          String?
+  createdById             String?
+  createdByName           String?
+  notes                   String?
+  primaryDepartmentId     String?
+  primaryDepartment       Department?               @relation("PrimaryDepartmentStaff", fields: [primaryDepartmentId], references: [id], onDelete: SetNull)
+  departmentAssignments   StaffDepartmentAssignment[]
+  administeringSessions   TherapySession[]          @relation("AdministeringStaffSessions")
+  responsibleVaidyaSessions TherapySession[]        @relation("ResponsibleVaidyaSessions")
+  responsibleCourses      PanchakarmaCourse[]       @relation("ResponsibleVaidyaCourses")
+  therapyAuthorizations   StaffTherapyAuthorization[]
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  @@map("staff_members")
+  @@index([role])
+  @@index([department])
+  @@index([status])
+  @@index([email])
+  @@index([primaryDepartmentId])
+}
+
+enum DepartmentDiscipline {
+  AYURVEDA
+  MODERN_MEDICINE
+  OPERATIONAL
+  ALLIED
+}
+
+enum AssignmentStatus {
+  active
+  completed
+  transferred
+  revoked
+}
+
+model HospitalProfile {
+  id              String    @id @default(uuid())
+  singletonKey    String    @unique @default("PRIMARY_INSTITUTION")
+  code            String    @default("SAH")
+  legalName       String    @default("Sahachara Ayurveda Yoga Ecoliving")
+  displayName     String    @default("Sahachara Ayurveda")
+  address         String?
+  city            String?
+  state           String?
+  country         String?   @default("India")
+  postalCode      String?
+  phone           String?
+  emergencyPhone  String?
+  email           String?
+  website         String?
+  timezone        String    @default("Asia/Kolkata")
+  currency        String    @default("INR")
+  version         Int       @default(1)
+  updatedById     String?
+  updatedByName   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("hospital_profiles")
+}
+
+model Department {
+  id                    String                @id @default(uuid())
+  code                  String                @unique
+  name                  String                @unique
+  description           String?
+  discipline            DepartmentDiscipline  @default(OPERATIONAL)
+  isActive              Boolean               @default(true)
+  deactivatedAt         DateTime?
+  deactivatedById       String?
+  deactivatedByName     String?
+  deactivationReason    String?
+  createdById           String?
+  createdByName         String?
+  updatedById           String?
+  updatedByName         String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  assignments           StaffDepartmentAssignment[]
+  primaryStaffMembers   StaffMember[]         @relation("PrimaryDepartmentStaff")
+  therapyRooms          TherapyRoom[]
+
+  @@map("departments")
+  @@index([discipline])
+  @@index([isActive])
+}
+
+model StaffDepartmentAssignment {
+  id                String            @id @default(uuid())
+  staffId           String
+  staffMember       StaffMember       @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  departmentId      String
+  department        Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  isPrimary         Boolean           @default(false)
+  roleTitle         String?
+  status            AssignmentStatus  @default(active)
+  startDate         DateTime          @default(now())
+  endDate           DateTime?
+  assignedById      String?
+  assignedByName    String?
+  revokedById       String?
+  revokedByName     String?
+  revocationReason  String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@map("staff_department_assignments")
+  @@index([staffId])
+  @@index([departmentId])
+  @@index([status])
+  @@index([isPrimary])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  timestamp  DateTime @default(now())
+  actor      String
+  role       String
+  category   String
+  action     String
+  patientMrn String?
+  details    String
+  ipAddress  String?  @default("192.168.1.42")
+
+  @@map("audit_logs")
+}
+
+model RateHistory {
+  id              String         @id @default(uuid())
+  tariffId        String
+  tariff          HospitalTariff @relation(fields: [tariffId], references: [id], onDelete: Cascade)
+  previousRate    Decimal?       @db.Decimal(12, 2)
+  newRate         Decimal?       @db.Decimal(12, 2)
+  isZeroPrice     Boolean        @default(false)
+  currency        String         @default("INR")
+  effectiveFrom   DateTime       @default(now())
+  effectiveUntil  DateTime?
+  changedById     String?
+  changedByName   String
+  changeReason    String?
+  createdAt       DateTime       @default(now())
+
+  @@map("rate_histories")
+}
+
+model HospitalTariff {
+  id                   String         @id @default(uuid())
+  category             String         // Consultation, Ayurvedic Consultation, Treatment, Panchakarma, etc.
+  serviceCode          String         @unique
+  serviceName          String
+  department           String?        @default("Hospital Operations")
+  serviceType          String?        @default("General")
+  rate                 Decimal?       @db.Decimal(12, 2) // null explicitly represents UNCONFIGURED tariff
+  currency             String         @default("INR")
+  isZeroPricePermitted Boolean        @default(false)
+  isActive             Boolean        @default(true)
+  unit                 String         @default("day")
+  durationMinutes      Int?
+  description          String?
+  notes                String?
+  effectiveFrom        DateTime?
+  effectiveUntil       DateTime?
+  updatedBy            String?        @default("Hospital Administration")
+  updatedById          String?
+  rateHistories        RateHistory[]
+  therapySessions      TherapySession[]
+  packageCourses       PanchakarmaCourse[] @relation("PackageTariffCourses")
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@map("hospital_tariffs")
+}
+
+model ClinicalEncounter {
+  id                             String                @id @default(uuid())
+  encounterNumber                String                @unique
+  patientId                      String
+  patient                        Patient               @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointmentId                  String?
+  appointment                    Appointment?          @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  practitionerId                 String
+  practitioner                   User                  @relation("PractitionerEncounters", fields: [practitionerId], references: [id], onDelete: Restrict)
+  practitionerName               String
+  practitionerRole               String                // 'DOCTOR' | 'VAIDYA'
+  discipline                     String                // 'DOCTOR' | 'VAIDYA'
+  encounterType                  String                @default("consultation") // initial, follow_up, emergency, walk_in
+  status                         String                @default("in_progress") // in_progress, completed, cancelled
+  startedAt                      DateTime              @default(now())
+  completedAt                    DateTime?
+  reasonForVisit                 String?
+  clinicalDocumentationCompleted Boolean               @default(false)
+
+  vitals                         ClinicalVitals[]
+  assessments                    ClinicalAssessment[]
+  diagnoses                      ClinicalDiagnosis[]
+  prescriptions                  Prescription[]
+  labOrders                      LabOrder[]
+  treatmentPlans                 TreatmentPlan[]
+  prakritiAssessments            PrakritiAssessment[]
+  vikritiAssessments             VikritiAssessment[]
+  doshaEvaluations               DoshaEvaluation[]
+  panchakarmaReferrals           PanchakarmaReferral[]
+
+  createdAt                      DateTime              @default(now())
+  updatedAt                      DateTime              @updatedAt
+
+  @@index([patientId])
+  @@index([appointmentId])
+  @@index([practitionerId])
+  @@index([discipline])
+  @@index([status])
+  @@map("clinical_encounters")
+}
+
+model ClinicalVitals {
+  id              String            @id @default(uuid())
+  encounterId     String
+  encounter       ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId       String
+  patient         Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  recordedAt      DateTime          @default(now())
+  recordedById    String
+  recordedByName  String
+  recordedByRole  String
+  bpSystolic      Int?
+  bpDiastolic     Int?
+  heartRate       Int?
+  respiratoryRate Int?
+  temperature     Decimal?          @db.Decimal(5, 2)
+  temperatureUnit String?           @default("F")
+  spO2            Int?
+  height          Decimal?          @db.Decimal(5, 2) // cm
+  weight          Decimal?          @db.Decimal(5, 2) // kg
+  bmi             Decimal?          @db.Decimal(5, 2) // calculated server-side only when height & weight exist
+  notes           String?
+  createdAt       DateTime          @default(now())
+
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("clinical_vitals")
+}
+
+model ClinicalAssessment {
+  id                         String            @id @default(uuid())
+  encounterId                String
+  encounter                  ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId                  String
+  patient                    Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  practitionerId             String
+  practitionerName           String
+  practitionerRole           String
+  presentingComplaints       String?
+  historyOfPresentingIllness String?
+  physicalExamination        String?
+  systemicExamination       Json?
+  clinicalObservations       String?
+  clinicalImpression         String?
+  differentialDiagnosis      String?
+  clinicalPlan               String?
+  followUpAdvice             String?
+  recordedAt                 DateTime          @default(now())
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("clinical_assessments")
+}
+
+model ClinicalDiagnosis {
+  id               String            @id @default(uuid())
+  encounterId      String
+  encounter        ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId        String
+  patient          Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  practitionerId   String
+  practitionerName String
+  practitionerRole String
+  diagnosisType    String            @default("provisional") // provisional, final, differential
+  icdCode          String?
+  diagnosisName    String
+  notes            String?
+  status           String            @default("active") // active, resolved, ruled_out
+  recordedAt       DateTime          @default(now())
+  createdAt        DateTime          @default(now())
+
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("clinical_diagnoses")
+}
+
+model PrakritiAssessment {
+  id                           String            @id @default(uuid())
+  encounterId                  String
+  encounter                    ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId                    String
+  patient                      Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  practitionerId               String
+  practitionerName             String
+  vataScore                    Decimal           @db.Decimal(5, 2)
+  pittaScore                   Decimal           @db.Decimal(5, 2)
+  kaphaScore                   Decimal           @db.Decimal(5, 2)
+  dominantPrakriti             String
+  physicalCharacteristics      Json?
+  physiologicalCharacteristics Json?
+  psychologicalCharacteristics Json?
+  clinicalInterpretation       String
+  recordedAt                   DateTime          @default(now())
+  createdAt                    DateTime          @default(now())
+
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("prakriti_assessments")
+}
+
+model VikritiAssessment {
+  id                     String            @id @default(uuid())
+  encounterId            String
+  encounter              ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId              String
+  patient                Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  practitionerId         String
+  practitionerName       String
+  primaryVikriti         String
+  secondaryVikriti       String?
+  vataAggravation        String?
+  pittaAggravation       String?
+  kaphaAggravation       String?
+  clinicalInterpretation String
+  recordedAt             DateTime          @default(now())
+  createdAt              DateTime          @default(now())
+
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("vikriti_assessments")
+}
+
+model DoshaEvaluation {
+  id                     String            @id @default(uuid())
+  encounterId            String
+  encounter              ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId              String
+  patient                Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  practitionerId         String
+  practitionerName       String
+  agniStatus             String?
+  amaStatus              String?
+  koshthaType            String?
+  dhatuInvolvement       Json?
+  srotasInvolvement      Json?
+  ashtaVidhaPariksha     Json?
+  clinicalInterpretation String
+  recordedAt             DateTime          @default(now())
+  createdAt              DateTime          @default(now())
+
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("dosha_evaluations")
+}
+
+model PanchakarmaReferral {
+  id                 String            @id @default(uuid())
+  referralNumber     String            @unique
+  encounterId        String
+  encounter          ClinicalEncounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId          String
+  patient            Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  practitionerId     String
+  practitionerName   String
+  proposedProcedure  String
+  clinicalIndication String
+  preliminaryNotes   String?
+  urgency            String            @default("routine") // routine, urgent
+  status             String            @default("referred") // referred, scheduled, in_treatment, completed, cancelled
+  referredAt         DateTime          @default(now())
+  createdAt          DateTime          @default(now())
+
+  course             PanchakarmaCourse?
+
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("panchakarma_referrals")
+}
+
+// ==========================================
+// PHASE 7: AYURVEDIC THERAPY & PANCHAKARMA OPERATIONS
+// ==========================================
+
+enum TherapyRoomType {
+  MASSAGE_DRONI_ROOM
+  SHIRODHARA_ROOM
+  SWEDANA_STEAM_ROOM
+  PANCHAKARMA_PROCEDURE_ROOM
+}
+
+enum RoomOperationalStatus {
+  AVAILABLE
+  OCCUPIED
+  SANITIZING
+  MAINTENANCE
+}
+
+enum SessionExecutionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  ABORTED
+}
+
+enum PanchakarmaPhase {
+  PURVAKARMA
+  PRADHANAKARMA
+  PASCHATKARMA
+  COMPLETED
+}
+
+enum SessionBillingMode {
+  PER_SESSION
+  PACKAGE_COVERED
+  UNBILLED
+}
+
+enum PanchakarmaBillingMode {
+  PER_SESSION
+  PACKAGE_BILLED
+}
+
+model TherapyRoom {
+  id               String                 @id @default(uuid())
+  code             String                 @unique
+  name             String
+  roomType         TherapyRoomType
+  status           RoomOperationalStatus  @default(AVAILABLE)
+  departmentId     String?
+  department       Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  bufferMinutes    Int?                   // Configurable turnaround sanitization buffer in minutes (NULL indicates unconfigured; booking prevented until explicitly configured)
+  isActive         Boolean                @default(true)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  sessions         TherapySession[]
+
+  @@map("therapy_rooms")
+  @@index([status])
+  @@index([roomType])
+}
+
+model TherapySession {
+  id                      String                 @id @default(uuid())
+  sessionNumber           Int
+  sessionRef              String                 @unique
+  patientId               String
+  patient                 Patient                @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  treatmentPlanId         String?
+  treatmentPlan           TreatmentPlan?         @relation(fields: [treatmentPlanId], references: [id], onDelete: Restrict)
+  panchakarmaCourseId     String?
+  panchakarmaCourse       PanchakarmaCourse?     @relation(fields: [panchakarmaCourseId], references: [id], onDelete: Restrict)
+  roomId                  String?
+  room                    TherapyRoom?           @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  roomCodeSnapshot        String
+  roomNameSnapshot        String
+  administeringStaffId    String
+  administeringStaff      StaffMember            @relation("AdministeringStaffSessions", fields: [administeringStaffId], references: [id], onDelete: Restrict)
+  responsibleVaidyaId     String
+  responsibleVaidya       StaffMember            @relation("ResponsibleVaidyaSessions", fields: [responsibleVaidyaId], references: [id], onDelete: Restrict)
+  scheduledStartAt        DateTime
+  scheduledEndAt          DateTime
+  actualStartAt           DateTime?
+  completedAt             DateTime?
+  status                  SessionExecutionStatus @default(SCHEDULED)
+  preProcedureAssessment  Json?
+  postProcedureAssessment Json?
+  clinicalNotes           String?
+  cancellationReason      String?
+  tariffId                String?
+  tariff                  HospitalTariff?        @relation(fields: [tariffId], references: [id], onDelete: SetNull)
+  billableAmount          Decimal?               @db.Decimal(12, 2)
+  billingMode             SessionBillingMode     @default(UNBILLED)
+  isBilled                Boolean                @default(false)
+  invoiceId               String?
+  invoice                 Invoice?               @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  @@map("therapy_sessions")
+  @@index([patientId])
+  @@index([treatmentPlanId])
+  @@index([panchakarmaCourseId])
+  @@index([roomId, scheduledStartAt, scheduledEndAt])
+  @@index([administeringStaffId, scheduledStartAt, scheduledEndAt])
+  @@index([responsibleVaidyaId, scheduledStartAt, scheduledEndAt])
+  @@index([status])
+  @@index([isBilled])
+}
+
+model PanchakarmaPhaseTransition {
+  id                        String            @id @default(uuid())
+  courseId                  String
+  course                    PanchakarmaCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  previousPhase             PanchakarmaPhase
+  newPhase                  PanchakarmaPhase
+  authorizedById            String
+  authorizedByName          String
+  authorizedAt              DateTime          @default(now())
+  clinicalRationale         String
+  dietaryTransitionNotes    String?
+  nextProcedureInstructions String?
+  createdAt                 DateTime          @default(now())
+
+  @@map("panchakarma_phase_transitions")
+  @@index([courseId])
+}
+
+model StaffTherapyAuthorization {
+  id                    String      @id @default(uuid())
+  staffId               String
+  staffMember           StaffMember @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  approvedQualification String
+  authorizedTherapyTypes Json?
+  verifiedById          String
+  verifiedByName        String
+  verifiedAt            DateTime    @default(now())
+  isRevoked             Boolean     @default(false)
+  revokedAt             DateTime?
+  revokedById           String?
+  revokedByName         String?
+  revocationReason      String?
+  expiresAt             DateTime?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@map("staff_therapy_authorizations")
+  @@index([staffId])
+  @@index([isRevoked])
+}

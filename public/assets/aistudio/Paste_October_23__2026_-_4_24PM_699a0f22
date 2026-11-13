@@ -1,0 +1,1730 @@
+# SAHACHARA OS — COMPLETE SYSTEM WORKFLOW, PRODUCT ARCHITECTURE AND UI REDESIGN MASTER PROMPT
+
+## 1. YOUR ROLE AND OBJECTIVE
+
+Act as a principal product designer, senior UX architect, healthcare SaaS specialist, and senior frontend engineer.
+
+Build a completely new UI/UX for Sahachara OS, an Ayurvedic healthcare operations management platform. The goal is to experiment with a new visual design and information architecture while preserving the existing system's business logic, workflows, data relationships, authentication rules, authorization model, and operational capabilities.
+
+This is a UI redesign and implementation project, not a request to invent a new healthcare system.
+
+The application should feel like a premium, modern, enterprise-grade healthcare operating system rather than a conventional clinic management dashboard.
+
+The final result must be a cohesive, functional application with connected pages, realistic workflows, reusable components, proper navigation, responsive layouts, and consistent interaction patterns.
+
+Do not build only a landing page or a collection of disconnected mockup screens. Build the application shell and all required internal screens.
+
+## 2. CRITICAL PROJECT RULES
+
+Before making any changes:
+
+1. Inspect the existing project files, package configuration, framework, routing structure, components, styling, database integration, authentication, API endpoints, and existing workflows.
+2. Identify the existing application's actual capabilities and distinguish implemented features from proposed features.
+3. Reuse the existing technology stack, dependencies, authentication system, data models, APIs, and business logic wherever available.
+4. Do not replace the backend or database.
+5. Do not introduce a new authentication provider or modify authentication behavior.
+6. Do not modify database schemas, migrations, API contracts, environment variables, authorization rules, or business logic simply to make the new UI easier to build.
+7. Do not remove existing functionality.
+8. Do not replace working backend integrations with hardcoded arrays, fake APIs, or local-only data.
+9. If a backend feature is unavailable, build the appropriate frontend interface and clearly separate the presentation layer from the future integration point.
+10. Never display fake success messages for operations that have not actually succeeded.
+11. Do not invent existing routes, database columns, API endpoints, or permissions. Discover them from the project.
+12. Do not introduce patient data into public URLs, browser storage, logs, or unnecessary client-side caches.
+13. Preserve all existing security protections, server-side authorization, and organization boundaries.
+14. Complete the UI implementation rather than stopping after an audit or design proposal.
+
+The existing system is the source of truth for implemented behavior. This specification defines the intended product experience and functional coverage.
+
+If the current system has different naming or workflows, preserve the actual implemented behavior and adapt the UI accordingly.
+
+## 3. PRODUCT OVERVIEW
+
+Sahachara OS is an Ayurvedic healthcare operations platform that connects patient registration, appointments, consultations, Ayurvedic assessments, treatment plans, Panchakarma courses, therapy sessions, prescriptions, pharmacy inventory, dispensing, invoicing, payments, receipts, reporting, staff management, and system administration.
+
+The core patient journey is:
+
+Patient Registration → Appointment Booking → Patient Check-In → Consultation → Clinical Assessment → Ayurvedic Assessment → Treatment Plan → Therapy or Panchakarma → Prescription → Pharmacy Dispensing → Invoice → Payment → Receipt → Follow-Up → Reporting.
+
+Not every patient must complete every stage. The system must support existing workflow variations, standalone appointments, follow-ups, treatments, prescriptions, billing, and other operations as permitted by the existing backend.
+
+Every module should connect to the relevant patient, appointment, consultation, treatment, prescription, invoice, or payment record.
+
+## 4. APPLICATION SHELL
+
+Create a persistent application shell consisting of a sidebar, top navigation bar, page content region, and contextual overlays.
+
+### 4.1 Sidebar
+
+Organize navigation into the following groups:
+
+SAHACHARA OS
+
+- Dashboard
+
+PATIENT CARE
+
+- Patients
+- Appointments
+- Consultations
+- Treatments
+- Panchakarma
+
+PHARMACY
+
+- Pharmacy Dashboard
+- Medicines and Inventory
+- Prescriptions
+- Dispensing
+- Stock Movements
+- Suppliers
+
+FINANCE
+
+- Billing Overview
+- Invoices
+- Payments
+- Receipts
+- Outstanding Balances
+
+INSIGHTS
+
+- Reports
+
+ADMINISTRATION
+
+- Settings
+
+The sidebar must support expanded and collapsed states, active route highlighting, expandable groups, icons, responsive mobile navigation, and appropriate role-based visibility.
+
+Do not show unauthorized modules to users. Hiding a navigation item is not a substitute for server-side permission enforcement.
+
+Where the existing application already has a different route structure, map these navigation concepts to the existing routes rather than breaking routing.
+
+### 4.2 Global Header
+
+Include:
+
+- Sahachara OS branding.
+- Organization or clinic context.
+- Global search.
+- Notification center.
+- Help or support entry.
+- Theme control if supported.
+- Current user's avatar, name, role, and account menu.
+
+The account menu should include only supported options, such as profile, account settings, security, and logout.
+
+### 4.3 Global Search
+
+Implement a searchable command interface that can search authorized records such as:
+
+- Patients and patient IDs.
+- Phone numbers where permitted.
+- Appointments.
+- Consultations.
+- Treatment plans.
+- Panchakarma courses.
+- Prescriptions.
+- Medicines.
+- Invoices.
+- Payments.
+
+Show categorized results with relevant identifiers, statuses, and contextual details.
+
+Selecting a result should navigate to its actual record.
+
+Use existing search APIs when available. Apply authorization and organization scoping to all search results. Provide loading, empty, error, and no-permission states.
+
+### 4.4 Global Quick Actions
+
+Provide a contextual quick-action menu for supported operations:
+
+- Register Patient.
+- Book Appointment.
+- Start Consultation.
+- Create Treatment Plan.
+- Create Panchakarma Course.
+- Create Prescription.
+- Dispense Medicine.
+- Create Invoice.
+- Record Payment.
+- Add Staff.
+
+Show only actions the current user is authorized to perform.
+
+## 5. DASHBOARD
+
+Create an operational command center tailored to the current user's role and permissions.
+
+### Dashboard header
+
+Display a time-appropriate greeting, current date, clinic context, and relevant operational summary.
+
+### KPI cards
+
+Where supported by existing data, display:
+
+- Today's Patients.
+- Today's Appointments.
+- Pending Consultations.
+- Active Treatments.
+- Scheduled Panchakarma Sessions.
+- Pending Payments.
+- Low-Stock Medicines.
+- Today's Revenue.
+
+Do not fabricate numbers. Retrieve actual metrics from the existing backend. If the relevant API is unavailable, show an honest unavailable or empty state.
+
+### Dashboard sections
+
+1. Today's appointment schedule.
+2. Patient waiting queue.
+3. Consultations in progress.
+4. Upcoming treatment and Panchakarma sessions.
+5. Pharmacy stock alerts.
+6. Outstanding invoices.
+7. Recent payments.
+8. Recent activity.
+9. Operational notifications.
+10. Quick actions.
+
+Allow users to navigate directly from a metric or schedule item to the relevant filtered module.
+
+Dashboard widgets should be modular so that different roles can see appropriate information.
+
+## 6. PATIENT MANAGEMENT
+
+### 6.1 Patient Registry
+
+Create a searchable patient listing with:
+
+- Patient ID.
+- Patient name.
+- Age or date of birth, where available.
+- Gender, where applicable.
+- Contact information according to permissions.
+- Last visit.
+- Next appointment.
+- Active treatment.
+- Outstanding balance, when authorized.
+- Patient status.
+
+Include pagination, sorting, filtering, and column responsiveness.
+
+Filters should use available backend fields and may include registration date, doctor, patient status, active treatment, and other supported attributes.
+
+Available actions can include View Patient, Edit Patient, Book Appointment, Start Consultation, and Create Invoice.
+
+### 6.2 Patient Registration
+
+Create a structured registration workflow with logical sections:
+
+A. Basic Information
+- First name.
+- Last name.
+- Date of birth.
+- Gender, where applicable.
+- Other existing patient identity fields.
+
+B. Contact Information
+- Phone.
+- Email.
+- Address.
+
+C. Emergency Contact
+- Contact name.
+- Relationship.
+- Contact number.
+
+D. Clinical Information
+- Existing conditions.
+- Allergies.
+- Relevant medical history.
+- Other supported clinical information.
+
+E. Consent and Preferences
+- Applicable consent records.
+- Communication preferences where supported.
+
+F. Review and Create
+
+Use the actual schema to determine required fields. Do not invent mandatory fields or add unsupported data to the database.
+
+Validate user input, prevent duplicate submissions, provide clear validation errors, and display success only after the server confirms patient creation.
+
+Generate or display patient IDs according to the existing backend's rules.
+
+### 6.3 Patient 360
+
+Patient 360 is a central feature of the product.
+
+Create a patient detail workspace with:
+
+PATIENT HEADER
+- Patient name.
+- Patient ID.
+- Contact information.
+- Patient status.
+- Relevant clinical alerts.
+- Current treatment summary.
+- Upcoming appointment.
+
+PRIMARY ACTIONS
+- Book Appointment.
+- Start Consultation.
+- View Prescriptions.
+- Create Invoice, if authorized.
+
+TABS
+
+1. Overview.
+2. Appointments.
+3. Clinical History.
+4. Treatments.
+5. Panchakarma.
+6. Prescriptions.
+7. Pharmacy.
+8. Billing.
+9. Activity History, if supported.
+
+Overview should show a summary of the patient's latest activity, upcoming appointment, recent consultations, active treatment plans, prescriptions, relevant alerts, and authorized financial information.
+
+Appointments should show scheduled, completed, cancelled, and historical appointments.
+
+Clinical History should show existing consultations, clinical findings, assessments, and relevant notes.
+
+Treatments should show treatment plans, session progress, assigned providers, and completion status.
+
+Panchakarma should show associated courses, sessions, schedules, and progress.
+
+Prescriptions should show medication instructions and dispensing status.
+
+Pharmacy should show relevant dispensing history.
+
+Billing should show invoices, payments, receipts, and outstanding balances when authorized.
+
+Use the actual patient identifier to retrieve related records. Avoid duplicating information unnecessarily or exposing records belonging to another organization.
+
+## 7. APPOINTMENT MANAGEMENT
+
+### 7.1 Appointment Navigation
+
+Provide:
+
+- Appointment Calendar.
+- Today's Appointments.
+- Upcoming Appointments.
+- Appointment History.
+- Book Appointment.
+
+### 7.2 Calendar
+
+Support day, week, and month views where appropriate.
+
+Include filters for provider, appointment type, status, and location when supported.
+
+Each appointment entry should display the patient, provider, time, appointment type, and status.
+
+Use the existing availability and scheduling rules.
+
+### 7.3 Book Appointment Workflow
+
+1. Select or create a patient, subject to permissions.
+2. Select the provider.
+3. Select appointment type.
+4. Select date.
+5. Retrieve available time slots.
+6. Check scheduling conflicts.
+7. Enter notes or other supported details.
+8. Review the booking.
+9. Submit.
+10. Display the confirmed appointment only after the server confirms creation.
+
+Do not invent availability or allow the UI to bypass server-side conflict detection.
+
+### 7.4 Appointment Statuses
+
+Use the statuses supported by the existing system. The intended workflow may include:
+
+- Scheduled.
+- Confirmed.
+- Arrived.
+- Waiting.
+- In Progress.
+- Completed.
+- Cancelled.
+- No Show.
+
+Do not introduce new database statuses without approval and an existing implementation plan.
+
+### 7.5 Check-In Workflow
+
+Today's appointment screen should make front-desk work efficient.
+
+Where supported:
+
+Scheduled or Confirmed → Arrived → Waiting → In Progress → Completed.
+
+Provide the appropriate next action based on the current status and user permissions.
+
+Handle cancelled appointments, no-shows, rescheduling, and duplicate check-ins safely.
+
+## 8. CONSULTATIONS AND CLINICAL WORKSPACE
+
+### 8.1 Consultation Queue
+
+Provide separate views or filters for:
+
+- Pending.
+- In Progress.
+- Completed.
+
+Display patient, provider, appointment, date, consultation type, and status.
+
+### 8.2 Start Consultation
+
+When a consultation begins:
+
+1. Load the authorized patient record.
+2. Display relevant clinical context.
+3. Retrieve allergies and previous medical history.
+4. Display previous consultations and active treatments.
+5. Start or resume the appropriate consultation.
+6. Capture assessment and findings.
+7. Create or update the treatment plan where supported.
+8. Create a prescription where supported.
+9. Save and complete the consultation according to the existing workflow.
+
+### 8.3 Clinical Workspace Layout
+
+Use a two-column layout on desktop.
+
+LEFT CONTEXT PANEL
+- Patient identity.
+- Relevant clinical alerts.
+- Allergies.
+- Previous conditions.
+- Current medicines.
+- Active treatments.
+- Recent consultation history.
+
+MAIN WORKSPACE
+- Chief complaint.
+- Duration and severity.
+- Present illness.
+- Relevant medical history.
+- Family history where supported.
+- Diet and lifestyle information.
+- Sleep and other relevant observations.
+- Vital signs where supported.
+- Physical examination findings.
+- Clinical assessment.
+- Diagnosis or findings according to the existing system.
+- Treatment recommendations.
+- Clinical notes.
+
+Use structured sections, autosave only if the existing implementation safely supports it, and clear save states.
+
+Do not invent clinical data or automatically generate diagnoses.
+
+### 8.4 Ayurvedic Assessment
+
+Provide structured sections for existing supported Ayurvedic assessment fields, potentially including:
+
+- Prakriti.
+- Vikriti.
+- Dosha assessment.
+- Agni.
+- Ama.
+- Koshtha.
+- Nidra.
+- Ahara.
+- Vihara.
+- Other observations.
+
+These are clinical assessment fields, not mandatory assumptions about the current database.
+
+Render only the fields supported by the existing implementation. Do not generate clinical recommendations or diagnoses without a supported workflow and appropriate practitioner control.
+
+### 8.5 Consultation Completion
+
+Before completion, show a summary of the entered assessment, saved notes, treatment plan, and prescription if applicable.
+
+Prevent accidental loss of unsaved clinical information.
+
+Use confirmation dialogs for consequential actions. Clearly distinguish a draft, an in-progress consultation, and a completed consultation.
+
+Preserve existing rules for editing completed records.
+
+## 9. TREATMENT MANAGEMENT
+
+### Navigation
+
+- Active Treatments.
+- Treatment Plans.
+- Therapy Sessions.
+- Treatment History.
+
+### 9.1 Treatment Plan
+
+A treatment plan may contain:
+
+- Patient.
+- Treatment.
+- Clinical objective.
+- Frequency.
+- Duration.
+- Number of sessions.
+- Assigned provider.
+- Start date.
+- End date.
+- Notes.
+- Status.
+
+Use the actual backend schema.
+
+### 9.2 Active Treatments
+
+Display:
+
+- Patient.
+- Treatment.
+- Total sessions.
+- Completed sessions.
+- Remaining sessions.
+- Assigned provider.
+- Next session.
+- Status.
+
+Show progress indicators derived from actual session records.
+
+### 9.3 Therapy Session Detail
+
+Display:
+
+- Patient.
+- Treatment plan.
+- Session number.
+- Scheduled time.
+- Assigned provider.
+- Pre-session notes.
+- Session observations.
+- Post-session notes.
+- Completion state.
+
+Where supported, implement:
+
+Scheduled → In Progress → Completed.
+
+Allow cancellation or rescheduling only according to existing permissions and rules.
+
+Update session progress using confirmed backend results.
+
+### 9.4 Treatment History
+
+Provide filters for patient, treatment, provider, date, and status where supported.
+
+Selecting a treatment should open its detail page and associated session history.
+
+## 10. PANCHAKARMA MANAGEMENT
+
+### Navigation
+
+- Panchakarma Dashboard.
+- Active Courses.
+- Plans.
+- Sessions.
+- History.
+
+### 10.1 Panchakarma Course Creation
+
+Where supported:
+
+1. Select patient.
+2. Review relevant clinical assessment.
+3. Select or create a supported protocol.
+4. Define course details.
+5. Assign practitioner.
+6. Define dates and session schedule.
+7. Review and save.
+8. Open the created course.
+
+Do not assume every protocol is already configured in the system.
+
+### 10.2 Course Detail
+
+Display:
+
+- Course ID.
+- Patient.
+- Protocol.
+- Practitioner.
+- Start date.
+- Expected end date.
+- Total sessions.
+- Completed sessions.
+- Remaining sessions.
+- Current status.
+- Relevant observations.
+
+Provide tabs for:
+
+- Overview.
+- Assessment.
+- Schedule.
+- Sessions.
+- Observations.
+- Notes.
+- Billing, when supported.
+
+### 10.3 Course Progress
+
+Display a progress indicator calculated from actual course sessions.
+
+Support the statuses implemented by the existing system. Intended states may include Planned, Active, Completed, and Cancelled.
+
+Keep course-level status distinct from individual session status.
+
+### 10.4 Panchakarma Sessions
+
+Display session schedule, assigned practitioner, patient, session details, observations, and completion status.
+
+Prevent duplicate completion, invalid session transitions, and inaccurate progress calculations.
+
+## 11. PHARMACY AND INVENTORY
+
+### Navigation
+
+- Pharmacy Dashboard.
+- Medicines.
+- Inventory.
+- Prescriptions.
+- Dispensing.
+- Stock Movements.
+- Suppliers.
+
+### 11.1 Pharmacy Dashboard
+
+Display actual metrics for:
+
+- Total medicines.
+- Low-stock medicines.
+- Out-of-stock medicines.
+- Medicines expiring soon.
+- Today's dispensing.
+- Recent stock movements.
+
+Include actionable inventory alerts.
+
+### 11.2 Medicine Registry
+
+Display:
+
+- Medicine name.
+- Generic name, if available.
+- SKU or medicine identifier.
+- Category.
+- Unit.
+- Available stock.
+- Reorder level.
+- Expiry information.
+- Status.
+
+Include search, filters, sorting, and pagination.
+
+### 11.3 Medicine Detail
+
+Display:
+
+- Medicine information.
+- Current stock.
+- Reserved stock, if implemented.
+- Available stock.
+- Batch details.
+- Expiry dates.
+- Purchase price and selling price, subject to permissions.
+- Stock movement history.
+
+Do not invent batch tracking or reserved stock if the backend does not support it.
+
+### 11.4 Stock Management
+
+Provide the existing supported stock operations, such as recording stock receipts, adjustments, and stock movements.
+
+Any adjustment must follow existing authorization rules and server-side inventory validation.
+
+Require confirmation for consequential stock adjustments.
+
+### 11.5 Prescriptions
+
+Prescriptions should connect to the appropriate consultation and patient.
+
+A prescription may contain:
+
+- Medicine.
+- Dosage.
+- Frequency.
+- Duration.
+- Quantity.
+- Food instructions.
+- Other instructions.
+
+Only use fields that the existing system supports.
+
+Prescription creation workflow:
+
+Consultation → Add Medicine → Enter Instructions → Validate → Save or Issue.
+
+Show the actual prescription status and dispensing history.
+
+### 11.6 Dispensing Workflow
+
+1. Open an eligible prescription.
+2. Verify patient and prescribed items.
+3. Retrieve actual inventory.
+4. Check stock availability.
+5. Select the appropriate batch when batch selection is supported.
+6. Enter dispensing quantities.
+7. Review the dispensing operation.
+8. Submit to the backend.
+9. Update inventory through the authoritative server-side process.
+10. Display the resulting dispensing record.
+
+Support Draft, Issued, Partially Dispensed, Fully Dispensed, or Cancelled states only where they exist in the application.
+
+Do not allow negative inventory unless the existing business rules explicitly permit it.
+
+Prevent duplicate dispensing and duplicate inventory deductions.
+
+## 12. BILLING AND FINANCE
+
+### Navigation
+
+- Billing Overview.
+- Invoices.
+- Payments.
+- Receipts.
+- Outstanding Balances.
+
+### 12.1 Billing Overview
+
+Display actual financial metrics:
+
+- Today's revenue.
+- Monthly revenue.
+- Total invoiced.
+- Amount collected.
+- Outstanding balance.
+- Overdue invoices.
+- Recent payments.
+
+Clearly distinguish invoices issued, payments received, and outstanding amounts.
+
+Do not count an invoice total as collected revenue.
+
+### 12.2 Invoice Creation
+
+Workflow:
+
+1. Select patient.
+2. Add supported services or treatments.
+3. Add pharmacy items when applicable.
+4. Enter quantities.
+5. Retrieve applicable prices.
+6. Apply permitted discounts.
+7. Apply configured tax rules.
+8. Calculate totals using authoritative backend logic.
+9. Review invoice.
+10. Create invoice.
+11. Open invoice details.
+
+The application uses INR as the default currency. Display amounts using the rupee symbol and appropriate formatting.
+
+Tax is disabled by default in the existing product configuration. Preserve the actual organization's tax settings and do not independently enable taxes.
+
+Do not duplicate billing logic in a way that causes the frontend and backend to calculate different totals.
+
+### 12.3 Invoice List
+
+Display:
+
+- Invoice number.
+- Patient.
+- Invoice date.
+- Total.
+- Amount paid.
+- Outstanding balance.
+- Status.
+
+Include search, filters, pagination, and authorized actions.
+
+### 12.4 Invoice Detail
+
+Display:
+
+- Invoice identifier.
+- Patient details.
+- Invoice date.
+- Line items.
+- Quantities.
+- Rates.
+- Discounts.
+- Tax.
+- Subtotal.
+- Total.
+- Amount paid.
+- Remaining balance.
+- Payment history.
+
+Actions may include:
+
+- Record Payment.
+- Download PDF.
+- Print.
+- Send, if supported.
+
+### 12.5 Payment Recording
+
+Workflow:
+
+Invoice → Record Payment → Select Supported Payment Method → Enter Amount → Enter Reference if Required → Review → Submit → Update Invoice → Generate Receipt.
+
+Validate payment amount and invoice balance on the server.
+
+Support partial payments if the existing backend allows them.
+
+Prevent duplicate payment submissions. Do not mark an invoice as paid before the payment operation succeeds.
+
+### 12.6 Receipts
+
+Display:
+
+- Receipt number.
+- Patient.
+- Associated invoice.
+- Payment date.
+- Amount paid.
+- Payment method.
+- Transaction reference, where applicable.
+- Remaining balance.
+
+Provide PDF download, print, or sharing actions only when implemented.
+
+### 12.7 Outstanding Balances
+
+Provide a dedicated view for unpaid and partially paid invoices.
+
+Allow filtering by patient, date, and status where supported.
+
+Make the remaining balance clear without confusing it with the original invoice total.
+
+## 13. REPORTS AND ANALYTICS
+
+### Navigation
+
+- Reports Overview.
+- Patient Reports.
+- Appointment Reports.
+- Clinical Reports.
+- Treatment Reports.
+- Panchakarma Reports.
+- Pharmacy Reports.
+- Billing Reports.
+- Operational Reports.
+
+### 13.1 Reports Overview
+
+Provide date filters for:
+
+- Today.
+- Last 7 Days.
+- Last 30 Days.
+- This Month.
+- This Year.
+- Custom Range.
+
+Use real aggregated data.
+
+### 13.2 Patient Reports
+
+Potential reports:
+
+- New patients.
+- Returning patients.
+- Patient growth.
+- Active and inactive patients.
+- Patient demographics.
+
+### 13.3 Appointment Reports
+
+Potential reports:
+
+- Appointments by day.
+- Completed appointments.
+- Cancellations.
+- No-shows.
+- Provider utilization.
+- Appointment type distribution.
+
+### 13.4 Clinical Reports
+
+Potential reports:
+
+- Consultation volume.
+- Consultation completion.
+- Practitioner activity.
+- Existing supported clinical assessment trends.
+
+Restrict sensitive clinical reports to authorized roles.
+
+### 13.5 Treatment Reports
+
+Potential reports:
+
+- Active treatment plans.
+- Completed plans.
+- Sessions performed.
+- Treatment utilization.
+- Provider activity.
+
+### 13.6 Panchakarma Reports
+
+Potential reports:
+
+- Active courses.
+- Completed courses.
+- Sessions performed.
+- Protocol utilization.
+- Course completion.
+
+### 13.7 Pharmacy Reports
+
+Potential reports:
+
+- Stock levels.
+- Low stock.
+- Expiry.
+- Dispensing.
+- Stock movements.
+- Medicine usage.
+
+### 13.8 Billing Reports
+
+Potential reports:
+
+- Invoiced amounts.
+- Collections.
+- Outstanding balances.
+- Payment methods.
+- Daily collections.
+- Monthly revenue.
+
+Ensure that all reports use correct date boundaries, currency, organization scope, and permission checks.
+
+Do not generate misleading charts from hardcoded data.
+
+## 14. SETTINGS AND ADMINISTRATION
+
+### Navigation
+
+- Organization.
+- Users & Staff.
+- Roles & Permissions.
+- Providers.
+- Services.
+- Treatment Configuration.
+- Pharmacy Configuration.
+- Billing Configuration.
+- Notifications.
+- Security.
+- Audit Logs.
+- System Settings.
+
+Only implement settings that correspond to existing capabilities. Where a configuration area is not implemented, clearly distinguish the frontend concept from an active setting.
+
+### 14.1 Organization Settings
+
+Display or manage supported fields:
+
+- Organization name.
+- Logo.
+- Address.
+- Contact details.
+- Website.
+- Currency.
+- Timezone.
+- Tax configuration.
+
+Respect existing organization-level configuration and validation.
+
+### 14.2 Users & Staff
+
+Display:
+
+- Staff name.
+- Email.
+- Role.
+- Department, if supported.
+- Account status.
+- Last login, if available.
+
+Actions:
+
+- Add Staff.
+- Edit Staff.
+- View Staff.
+- Deactivate.
+- Reactivate.
+
+Do not expose sensitive authentication data.
+
+### 14.3 Staff Activation Flow
+
+Preserve the existing intended activation design:
+
+ADMIN WORKFLOW
+
+Admin → Add Staff → Enter Staff Details and Corporate Email → Assign Role → Create Account → Generate or issue activation credential.
+
+The admin must not set the staff member's permanent password.
+
+STAFF WORKFLOW
+
+Staff opens the activation screen → Enters email and one-time activation PIN → Server verifies the PIN → Staff creates and confirms a password → Account activates → Staff logs in → Authorized dashboard opens.
+
+The activation credential must be one-time, expiring, stored securely as a hash where applicable, and protected against brute-force attempts.
+
+Use the existing Better Auth integration and activation implementation. Do not implement an independent authentication system.
+
+If the current authentication system already differs, preserve its working behavior and identify the discrepancy rather than breaking login.
+
+### 14.4 Roles and Permissions
+
+The existing role model includes:
+
+- Admin.
+- Manager.
+- Employee.
+- Viewer.
+
+Preserve the actual role definitions and permissions.
+
+Permission categories may include:
+
+- View.
+- Create.
+- Edit.
+- Delete.
+- Approve.
+- Export.
+- Financial access.
+- Patient data access.
+- Pharmacy access.
+- Reports access.
+- Settings access.
+
+Do not invent permission grants.
+
+ADMIN: Access to all functions explicitly authorized by the existing system.
+
+MANAGER: Operational and management functions according to existing permissions.
+
+EMPLOYEE: Assigned day-to-day operational functions according to existing permissions.
+
+VIEWER: Read-only access to permitted information.
+
+Use role-aware navigation and action controls, but enforce every permission on the server as well.
+
+### 14.5 Audit Logs
+
+Where supported, provide a searchable audit log with:
+
+- Timestamp.
+- User.
+- Action.
+- Module.
+- Record identifier.
+- Result.
+- Session or IP details when safely available.
+
+Examples include staff creation, consultation completion, prescription issuance, medicine dispensing, stock adjustment, payment recording, and permission changes.
+
+Audit data must come from actual audit records. Do not fabricate historical events.
+
+### 14.6 Security Settings
+
+Display supported security information:
+
+- Authentication settings.
+- Active sessions.
+- Login history.
+- Security events.
+- Password management.
+- Sign out other sessions.
+
+Do not expose passwords, PIN hashes, authentication secrets, session tokens, or other credentials.
+
+### 14.7 Notifications
+
+Create a notification center with categories for:
+
+Appointments:
+- Upcoming appointments.
+- Cancellations.
+- Patient check-in.
+
+Pharmacy:
+- Low stock.
+- Out of stock.
+- Expiring medicines.
+
+Billing:
+- Payments received.
+- Outstanding invoices.
+
+Administration:
+- Staff activation.
+- Security events.
+- System notifications.
+
+Display only notifications generated by actual backend events or supported notification services.
+
+## 15. DATA RELATIONSHIPS
+
+Preserve the existing data model and use its real identifiers and relationships.
+
+The conceptual relationships are:
+
+PATIENT
+- Appointments.
+- Consultations.
+- Clinical assessments.
+- Treatment plans.
+- Therapy sessions.
+- Panchakarma courses.
+- Panchakarma sessions.
+- Prescriptions.
+- Dispensing records.
+- Invoices.
+- Payments.
+- Receipts.
+
+APPOINTMENT
+- Patient.
+- Provider.
+- Appointment type.
+- Schedule.
+- Status.
+- Associated consultation where supported.
+
+CONSULTATION
+- Patient.
+- Appointment where applicable.
+- Provider.
+- Clinical notes.
+- Assessment.
+- Treatment plan where supported.
+- Prescription where supported.
+
+TREATMENT PLAN
+- Patient.
+- Treatment definition.
+- Provider.
+- Sessions.
+- Progress.
+
+PANCHAKARMA COURSE
+- Patient.
+- Protocol where supported.
+- Practitioner.
+- Scheduled sessions.
+- Observations.
+- Progress.
+
+PRESCRIPTION
+- Patient.
+- Consultation where applicable.
+- Prescribed items.
+- Dispensing records.
+
+PHARMACY
+- Medicine.
+- Inventory.
+- Batch where supported.
+- Stock movements.
+- Dispensing records.
+
+INVOICE
+- Patient.
+- Line items.
+- Payments.
+- Outstanding balance.
+- Receipts.
+
+USER
+- Organization scope.
+- Role.
+- Permissions.
+- Authentication identity.
+- Audit activity.
+
+Do not create a second competing source of truth for these records.
+
+## 16. STATUS AND WORKFLOW MANAGEMENT
+
+Use the actual status enums and transitions defined in the existing application.
+
+The following are conceptual examples, not permission to modify the backend.
+
+APPOINTMENTS
+Scheduled → Confirmed → Arrived → Waiting → In Progress → Completed.
+
+Alternative states may include Cancelled and No Show.
+
+CONSULTATIONS
+Pending → In Progress → Completed.
+
+TREATMENTS
+Planned → Active → Paused → Completed or Cancelled, where supported.
+
+PANCHAKARMA
+Planned → Active → Completed or Cancelled, where supported.
+
+PRESCRIPTIONS
+Draft → Issued → Partially Dispensed → Fully Dispensed, where supported.
+
+INVOICES
+Draft → Issued → Partially Paid → Paid, with Overdue or Cancelled states as supported.
+
+PAYMENTS
+Use the actual payment lifecycle, including successful, pending, failed, or refunded states where implemented.
+
+PATIENTS
+Use the actual active/inactive or equivalent patient status.
+
+Create consistent visual status indicators. Do not rely on color alone; include readable labels.
+
+Prevent invalid transitions and double submissions.
+
+## 17. VISUAL DESIGN DIRECTION
+
+Design a modern, premium, calm, professional healthcare SaaS application.
+
+The interface should combine the usability of a high-quality enterprise dashboard with the clarity of a modern clinical workspace.
+
+Visual qualities:
+
+- Clean and minimal.
+- High information density without clutter.
+- Strong typography hierarchy.
+- Consistent spacing.
+- Restrained use of color.
+- Professional tables.
+- Excellent data readability.
+- Subtle borders and restrained shadows.
+- Clear page titles and actions.
+- Consistent status indicators.
+- Elegant navigation.
+- Fast, predictable interactions.
+
+Avoid:
+
+- Excessive gradients.
+- Overly decorative backgrounds.
+- Large unnecessary hero sections.
+- Excessive rounded cards.
+- Too many floating panels.
+- Oversized KPI cards.
+- Excessive animations.
+- Inconsistent icon styles.
+- Decorative charts without operational value.
+- Repeated forms with no hierarchy.
+- Every field being enclosed in a separate card.
+- Excessive whitespace that forces users to scroll unnecessarily.
+
+Use a coherent design system with defined colors, typography, spacing, radii, borders, elevation, and responsive breakpoints.
+
+Choose a restrained visual palette appropriate for Ayurveda and modern healthcare, but prioritize legibility and accessibility over decorative branding.
+
+Use the project's existing component library where possible.
+
+Do not introduce a new UI framework unnecessarily.
+
+## 18. CORE REUSABLE COMPONENTS
+
+Build reusable components for:
+
+- AppShell.
+- Sidebar.
+- TopBar.
+- GlobalSearch.
+- NotificationCenter.
+- UserMenu.
+- Breadcrumbs.
+- PageHeader.
+- ActionToolbar.
+- KPI cards.
+- DataTable.
+- FilterBar.
+- SearchInput.
+- Pagination.
+- Tabs.
+- StatusBadge.
+- Timeline.
+- ActivityFeed.
+- EmptyState.
+- LoadingState.
+- ErrorState.
+- ConfirmationDialog.
+- Modal.
+- Drawer.
+- Toast.
+- FormField.
+- SelectField.
+- DatePicker.
+- PatientHeader.
+- PatientSummary.
+- PatientContextPanel.
+- AppointmentCard.
+- TreatmentProgress.
+- SessionCard.
+- PrescriptionSummary.
+- InvoiceSummary.
+- PaymentSummary.
+- AuditLogTable.
+- PermissionGate.
+
+Keep component APIs consistent and avoid duplicating the same UI patterns across modules.
+
+## 19. SCREEN LAYOUT PATTERNS
+
+Use reusable screen patterns instead of designing every screen independently.
+
+### LIST SCREEN
+
+Page Header → Summary Metrics Where Useful → Search and Filters → Table → Pagination.
+
+### DETAIL SCREEN
+
+Breadcrumbs → Record Header → Primary Actions → Summary → Tabs → Main Content → Related Records and Activity.
+
+### FORM SCREEN
+
+Page Header → Logical Form Sections → Validation → Review → Save or Submit → Result State.
+
+### OPERATIONAL DASHBOARD
+
+Metrics → Actionable Alerts → Work Queues → Schedule → Recent Activity.
+
+### CLINICAL WORKSPACE
+
+Patient Context → Clinical Assessment → Findings → Plan → Prescription → Save or Complete.
+
+### TRANSACTION WORKSPACE
+
+Record Summary → Items or Transactions → Calculations → Payment State → Receipt and History.
+
+Keep navigation and action placement consistent across all screen types.
+
+## 20. INTERACTION AND STATE REQUIREMENTS
+
+Every visible control must have meaningful behavior.
+
+Implement:
+
+- Working sidebar navigation.
+- Working nested routes.
+- Search.
+- Filters.
+- Sorting.
+- Pagination.
+- Tab switching.
+- Modal and drawer interactions.
+- Form validation.
+- Loading indicators.
+- Empty states.
+- Error states.
+- Success states.
+- Confirmation dialogs.
+- Disabled states.
+- Permission-based actions.
+- Responsive mobile menus.
+- Keyboard-accessible controls.
+
+Forms must preserve user input after recoverable errors.
+
+Disable duplicate submissions while a request is in progress.
+
+Use optimistic UI only when appropriate and reconcile with the server response.
+
+For critical operations such as dispensing medicine, completing clinical records, changing permissions, and recording payments, prioritize consistency and server confirmation over optimistic updates.
+
+Never leave a button visually active if its operation is unavailable. Either implement it, disable it with a clear explanation, or indicate that the feature is not yet available.
+
+## 21. ACCESSIBILITY AND RESPONSIVENESS
+
+Support:
+
+- Desktop.
+- Laptop.
+- Tablet.
+- Mobile.
+
+Use responsive layouts appropriate to each workflow.
+
+Data tables may become horizontally scrollable tables, prioritized column layouts, or record cards on narrow screens.
+
+Ensure keyboard navigation, accessible labels, visible focus indicators, sufficient contrast, and understandable validation errors.
+
+Do not rely exclusively on icons, colors, hover effects, or tooltips to communicate important information.
+
+Avoid horizontal page overflow.
+
+## 22. PERFORMANCE
+
+Optimize the UI without changing the underlying data or business logic.
+
+Use:
+
+- Appropriate pagination.
+- Server-side filtering when available.
+- Selective data fetching.
+- Debounced search where appropriate.
+- Lazy loading for noncritical sections.
+- Reusable components.
+- Efficient rendering.
+- Appropriate loading skeletons.
+- Existing caching strategies where safe.
+
+Do not add Redis, new databases, new caching infrastructure, or other backend dependencies as part of this UI-only redesign.
+
+Do not cache sensitive patient information in insecure browser storage.
+
+## 23. SECURITY AND PRIVACY
+
+Preserve the existing security architecture.
+
+Requirements:
+
+- Server-side authorization.
+- Organization-scoped data access.
+- Permission-aware actions.
+- Secure authentication.
+- Safe session handling.
+- No hardcoded secrets.
+- No authentication bypasses.
+- No sensitive data in URLs unnecessarily.
+- No sensitive information in console logs.
+- Proper input validation.
+- Safe rendering of user-provided content.
+- Protection against duplicate financial and inventory transactions.
+- Secure handling of activation credentials.
+- Respect existing audit and access-control rules.
+
+Frontend restrictions are for usability only. The backend must remain authoritative for access control and sensitive operations.
+
+## 24. ERROR HANDLING
+
+Create useful error states for:
+
+- Network failures.
+- Unauthorized access.
+- Expired sessions.
+- Missing records.
+- Validation errors.
+- Scheduling conflicts.
+- Inventory shortages.
+- Failed payments.
+- Duplicate submissions.
+- Unavailable reports.
+- Server errors.
+
+Messages should explain what happened and what the user can do next without exposing internal stack traces, credentials, or sensitive implementation details.
+
+Provide retry actions where safe.
+
+Do not silently swallow errors or display success after a failed request.
+
+## 25. EMPTY, LOADING, AND SUCCESS STATES
+
+Every data-driven screen must handle:
+
+LOADING
+- Skeletons or progress indicators.
+- Prevent confusing layout shifts.
+
+EMPTY
+- Clear explanation.
+- Relevant create action when permitted.
+- Filters reset option when appropriate.
+
+ERROR
+- Human-readable explanation.
+- Retry action when safe.
+- Appropriate handling of authorization failures.
+
+SUCCESS
+- Confirmation only after the underlying operation succeeds.
+- Updated record details.
+- Next relevant action.
+
+DESCTRUCTIVE ACTIONS
+- Confirmation where appropriate.
+- Clear description of the effect.
+- Safe cancellation.
+
+Do not confuse an empty dataset with an API failure.
+
+## 26. REQUIRED ROUTES AND SCREENS
+
+Use the existing routing conventions and adapt the following conceptual route map to the project.
+
+- Dashboard.
+- Patients list.
+- Patient registration.
+- Patient detail / Patient 360.
+- Patient editing.
+- Appointments list.
+- Appointment calendar.
+- Today's appointments.
+- Appointment booking.
+- Appointment detail.
+- Consultation queue.
+- Consultation workspace.
+- Consultation detail.
+- Treatment plans.
+- Treatment detail.
+- Therapy session detail.
+- Panchakarma dashboard.
+- Panchakarma course list.
+- Panchakarma course detail.
+- Panchakarma session detail.
+- Pharmacy dashboard.
+- Medicine list.
+- Medicine detail.
+- Inventory.
+- Stock movements.
+- Prescriptions.
+- Prescription detail.
+- Dispensing.
+- Suppliers.
+- Billing overview.
+- Invoices.
+- Invoice creation.
+- Invoice detail.
+- Payment recording.
+- Payment history.
+- Receipt detail.
+- Outstanding balances.
+- Reports overview.
+- Individual report screens.
+- Organization settings.
+- Users and staff.
+- Staff creation.
+- Staff activation, if applicable to the existing flow.
+- Roles and permissions.
+- Provider management.
+- Service configuration.
+- Treatment configuration.
+- Pharmacy configuration.
+- Billing configuration.
+- Notifications.
+- Security.
+- Audit logs.
+- System settings.
+- Existing login and account recovery routes.
+
+Do not generate broken links or duplicate routes. Every implemented navigation item must lead to a working screen.
+
+## 27. ROLE-BASED EXPERIENCE
+
+Build the interface around the actual roles and permissions in the existing application.
+
+ADMIN
+- Organization administration.
+- User and staff management.
+- Roles and permissions.
+- Operational modules.
+- Financial modules.
+- Reports.
+- Audit and security functions, according to actual permissions.
+
+MANAGER
+- Operational overview.
+- Patient management.
+- Appointment management.
+- Treatment operations.
+- Pharmacy and finance where authorized.
+- Reports and team operations where authorized.
+
+EMPLOYEE
+- Assigned patient operations.
+- Appointments.
+- Consultations.
+- Treatments.
+- Pharmacy or billing functions only where permitted.
+
+VIEWER
+- Read-only access to explicitly permitted information.
+
+These are UX guidance categories, not permission grants. The existing permission system remains authoritative.
+
+## 28. END-TO-END ACCEPTANCE WORKFLOWS
+
+The redesigned UI must support the following workflows using real backend functionality wherever it exists.
+
+WORKFLOW A: NEW PATIENT
+
+Register Patient → Validate Details → Create Record → Open Patient 360 → Book Appointment.
+
+WORKFLOW B: APPOINTMENT
+
+Select Patient → Select Provider → Retrieve Availability → Check Conflicts → Book Appointment → View Appointment.
+
+WORKFLOW C: CHECK-IN
+
+Open Today's Appointments → Locate Patient → Check In → Update Queue → Open Consultation When Permitted.
+
+WORKFLOW D: CONSULTATION
+
+Open Patient → Review History → Start Consultation → Enter Clinical Findings → Complete Supported Ayurvedic Assessment → Create Treatment Plan or Prescription → Save or Complete.
+
+WORKFLOW E: TREATMENT
+
+Open Treatment Plan → Schedule Sessions → Record Session → Update Progress → Complete Plan.
+
+WORKFLOW F: PANCHAKARMA
+
+Open Patient → Create Course → Schedule Sessions → Record Observations → Complete Sessions → Update Course Progress.
+
+WORKFLOW G: PRESCRIPTION AND PHARMACY
+
+Open Prescription → Verify Items → Check Stock → Select Batch When Supported → Dispense → Update Inventory → View Dispensing Record.
+
+WORKFLOW H: BILLING
+
+Select Patient → Add Supported Items → Calculate Invoice → Create Invoice → Record Payment → Update Balance → Generate Receipt.
+
+WORKFLOW I: STAFF ACTIVATION
+
+Admin Creates Staff → Activation Credential Issued → Staff Verifies Credential → Sets Password → Account Activates → Staff Logs In → Role-Appropriate Dashboard.
+
+WORKFLOW J: REPORTING
+
+Open Reports → Select Date Range → Apply Filters → Retrieve Real Data → View Results → Export Only When Supported and Authorized.
+
+WORKFLOW K: PERMISSIONS
+
+Admin Opens Staff or Role Management → Reviews Existing Permissions → Changes an Authorized Setting → Server Validates Change → Audit Record Created Where Supported → UI Reflects Confirmed State.
+
+## 29. TESTING AND VALIDATION
+
+After implementation:
+
+1. Verify that the application starts.
+2. Verify that existing authentication continues to work.
+3. Verify that organization and role context are preserved.
+4. Verify every sidebar item and nested navigation path.
+5. Verify every major screen renders without runtime errors.
+6. Verify patient registration and Patient 360 integration.
+7. Verify appointment creation and conflict handling.
+8. Verify consultation navigation and record persistence.
+9. Verify treatment and Panchakarma session flows.
+10. Verify prescription and dispensing integration.
+11. Verify inventory changes are not duplicated.
+12. Verify invoice calculations use authoritative backend logic.
+13. Verify payments and receipts are not duplicated.
+14. Verify role-based visibility and server-side authorization.
+15. Verify loading, empty, error, and success states.
+16. Verify responsive layouts.
+17. Verify keyboard accessibility.
+18. Verify existing routes and integrations have not been broken.
+19. Run the project's existing lint, type-check, and build commands where available.
+20. Fix regressions introduced by the UI implementation.
+
+Do not claim that a workflow is tested unless it has actually been tested.
+
+## 30. IMPLEMENTATION ORDER
+
+Follow this sequence:
+
+PHASE 1: PROJECT DISCOVERY
+Inspect the current application, stack, routes, APIs, authentication, database relationships, permissions, and existing design system.
+
+PHASE 2: APPLICATION SHELL
+Build the global layout, sidebar, header, search interface, page headers, and reusable design tokens.
+
+PHASE 3: CORE COMPONENTS
+Build shared tables, forms, filters, status indicators, drawers, dialogs, loading states, and error states.
+
+PHASE 4: PATIENT EXPERIENCE
+Implement patient listing, registration, patient details, and Patient 360.
+
+PHASE 5: APPOINTMENTS AND CONSULTATIONS
+Implement scheduling, calendar, check-in, consultation queues, and the clinical workspace.
+
+PHASE 6: TREATMENTS AND PANCHAKARMA
+Implement plans, courses, sessions, progress, and history.
+
+PHASE 7: PHARMACY
+Implement medicine listing, inventory, prescriptions, dispensing, stock movements, and supported supplier operations.
+
+PHASE 8: BILLING
+Implement invoices, payment recording, receipts, and outstanding balances.
+
+PHASE 9: REPORTS AND ADMINISTRATION
+Implement reports, staff management, roles, permissions, settings, security, and audit logs.
+
+PHASE 10: INTEGRATION AND TESTING
+Verify end-to-end navigation, backend connectivity, permissions, responsiveness, and build stability.
+
+Adapt this order to existing project dependencies where necessary.
+
+## 31. FINAL EXPECTED RESULT
+
+Deliver a complete, cohesive Sahachara OS UI redesign with:
+
+- A professional application shell.
+- A well-organized sidebar.
+- Consistent visual design.
+- All major product modules represented.
+- Connected patient records.
+- Functional navigation.
+- Working forms and interactions.
+- Role-aware interfaces.
+- Reusable components.
+- Real backend integration wherever available.
+- Honest unavailable-feature states where integration is missing.
+- Responsive layouts.
+- Accessible controls.
+- Secure data handling.
+- Preserved authentication and authorization.
+- No regressions to existing backend functionality.
+
+The finished application should feel like a unified Ayurvedic healthcare operating system.
+
+The dashboard must answer: What needs attention now?
+
+The patient workspace must answer: What is happening with this patient?
+
+The clinical workspace must answer: What needs to be assessed, documented, or completed?
+
+The operational modules must answer: What is the next action?
+
+The financial workspace must answer: What has been invoiced, what has been paid, and what remains outstanding?
+
+The administration workspace must answer: Who has access, what can they do, and what has changed?
+
+## 32. FINAL DESIGN PRINCIPLE
+
+Build the UI around three connected concepts:
+
+1. PATIENT-CENTRIC: Every clinical and operational record should connect naturally to the correct patient.
+2. WORKFLOW-CENTRIC: Users should move smoothly between appointments, consultations, treatments, prescriptions, pharmacy, and billing.
+3. ROLE-CENTRIC: Every user should see the right information and actions for their responsibilities.
+
+Prioritize speed, clarity, reliability, and usability over decorative design.
+
+The result should be visually distinctive from the existing UI while remaining functionally compatible with the current Sahachara OS implementation.
+
+Begin by inspecting the existing project. Then implement the redesign directly, preserving existing business logic and backend integrations throughout.

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: sahachara-ayurveda-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CLIENT_URL
+        value: https://os.sahachara.com
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false

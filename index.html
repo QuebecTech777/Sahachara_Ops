@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <script>
+    (function () {
+      function shouldSuppress(val) {
+        if (!val) return false;
+        var str = '';
+        try {
+          str = typeof val === 'string' ? val : (val.message || val.stack || String(val));
+        } catch (e) { }
+        str = str.toLowerCase();
+        return str.indexOf('websocket') !== -1 || str.indexOf('vite') !== -1 || str.indexOf('closed without opened') !== -1;
+      }
+      window.addEventListener('unhandledrejection', function (e) {
+        if (e && (shouldSuppress(e.reason) || shouldSuppress(e.detail))) {
+          e.preventDefault();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          return false;
+        }
+      }, true);
+      window.addEventListener('error', function (e) {
+        if (e && (shouldSuppress(e.message) || shouldSuppress(e.error))) {
+          e.preventDefault();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          return false;
+        }
+      }, true);
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sahachara OS</title>
+  <meta name="description"
+    content="Sahachara Ayurveda Yoga Ecoliving - Mannamkala Road, Munnar Hills, Adimali, Kerala 685561 (Code: SAH). Enterprise Ayurvedic Clinical Operations Management System." />
+  <meta property="og:title" content="Sahachara Ayurveda Yoga Ecoliving | os.sahachara.com" />
+  <meta property="og:description"
+    content="Sahachara Ayurveda Yoga Ecoliving - Mannamkala Road, Munnar Hills, Adimali, Kerala 685561 (Code: SAH). Enterprise Ayurvedic Clinical Operations Management System." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+    rel="stylesheet" />
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

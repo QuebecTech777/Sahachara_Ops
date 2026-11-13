@@ -1,0 +1,396 @@
+
+
+Sahachara Ayurveda Operations System
+## UI, Navigation, Pages, and Workflow Reference
+
+**Purpose:** Source-grounded implementation reference for rebuilding the current system's user interface and operational behavior.
+
+**Scope:** This report describes the implemented Next.js frontend, shared `@sahachara/ui` shell, NestJS API contracts, and Prisma domain model. It is not a screenshot specification: the repository does not include a live authenticated session or populated production dataset. Components render data-dependent details at runtime, so the source links below remain the authoritative implementation reference for exact field labels, validation text, and conditional states.
+
+---
+
+## 1. Product and technical shape
+
+Sahachara is an Ayurveda clinic operations application. The repository implements:
+
+- A Next.js App Router frontend using React 19 and IBM Carbon Design System v11.
+- A reusable UI package (`@sahachara/ui`) containing the enterprise shell, data display, feedback, and layout primitives.
+- A NestJS REST API mounted at `/api/v1`.
+- A PostgreSQL/Prisma domain model, with shared TypeScript contracts in `@sahachara/types`.
+
+The browser UI is composed from Carbon components and app-specific pages. It is not a static mockup: lists, records, status actions, and many metrics are driven by API data. A faithful rebuild therefore needs both the visual shell and the workflow/state behavior described below.
+
+### Global visual foundation
+
+- Document language is English. Root layout supplies IBM Plex Sans and IBM Plex Mono, Carbon `g10` as the initial theme, and app metadata. See [`layout.tsx`](../apps/web/src/app/layout.tsx).
+- The shell uses the app title **Ayurveda Operations** and prefix **SAHACHARA**. Login and activation are rendered outside the authenticated enterprise shell. See [`app-shell.tsx`](../apps/web/src/components/app-shell.tsx).
+- App-wide fonts are IBM Plex Sans (weights 300–700) and IBM Plex Mono (400–600), both Latin subsets with `display: swap`. Most colors come from Carbon theme variables; app accents include `#0f62fe`, with green/yellow/red status dots `#24a148`, `#f1c21b`, and `#da1e28`. See [`globals.scss`](../apps/web/src/app/globals.scss).
+- Common page composition uses a centered, columnar `PageContainer` (maximum width 1600px, 1.5rem vertical gaps), `PageHeader` (optional breadcrumbs, title, description, status and actions), sections, Carbon cards/tables, and status tags. See [`page-container.tsx`](../packages/ui/src/components/layout/page-container.tsx), [`page-header.tsx`](../packages/ui/src/components/layout/page-header.tsx), [`metric-card.tsx`](../packages/ui/src/components/data-display/metric-card.tsx), and [`operational-data-table.tsx`](../packages/ui/src/components/data-display/operational-data-table.tsx).
+- Metric tiles use uppercase 12px labels, 28px values, optional status dots/trends/icons, and a minimum height of 120px. Standard operational tables use compact Carbon tables, a toolbar search, zebra rows, pagination, loading skeletons, and defined error/empty states.
+- Shell geometry in global CSS: 48px header; 256px expanded sidebar; 64px collapsed sidebar; 44px navigation links. Main content offsets around the header/sidebar and uses 2rem desktop side padding. At widths ≤1056px the sidebar becomes a hidden/off-canvas 256px drawer and the main content loses its sidebar offset; at ≤672px page gutters/padding shrink and modals use 95vw width. Data-table containers support horizontal/touch scrolling. See [`globals.scss`](../apps/web/src/app/globals.scss).
+- The header switches between Carbon `g10` and `g100`. Although an architecture note mentions system sync, the implementation evidences an initial `g10` theme and a direct light/dark toggle; do not assume operating-system theme sync. See [`theme-provider.tsx`](../packages/ui/src/theme/theme-provider.tsx) and [`enterprise-header.tsx`](../packages/ui/src/components/shell/enterprise-header.tsx).
+- Shell/content transitions include reduced-motion handling; shared overview/tile classes add layer-backed surfaces and subtle hover transitions. The Carbon design tokens remain the source for most text/layer/border/interactive colors.
+
+## 2. Global shell and navigation
+
+### Header
+
+The top Carbon header includes, from left to right:
+
+1. Skip-to-content control.
+2. Mobile navigation drawer toggle.
+3. **SAHACHARA / Ayurveda Operations** brand link to `/dashboard`.
+4. Global operational search (also `⌘K` on macOS or `Ctrl+K`).
+5. Light/dark theme toggle.
+6. **System Notifications** popover. In the current implementation it is static: `0 Alerts` and “All clinical systems operational.”
+7. **Help and Documentation** popover with application version, Swagger link, approved email domain, and keyboard shortcut.
+8. **Staff Profile** menu with staff name/email, assigned role, and sign-out.
+
+Header implementation: [`enterprise-header.tsx`](../packages/ui/src/components/shell/enterprise-header.tsx), composed by [`enterprise-shell.tsx`](../packages/ui/src/components/shell/enterprise-shell.tsx).
+
+### Sidebar
+
+The sidebar has ten always-listed navigation destinations. There is a visual divider before Reports; no additional menu groups or role-dependent sidebar filtering are implemented in `PRIMARY_NAV_ITEMS`.
+
+| Order | Label | Route | Icon meaning |
+|---:|---|---|---|
+| 1 | Dashboard | `/dashboard` | Dashboard |
+| 2 | Patients | `/patients` | People |
+| 3 | Appointments | `/appointments` | Calendar |
+| 4 | Consultations | `/consultations` | Events |
+| 5 | Treatments | `/treatments` | Activity |
+| 6 | Panchakarma | `/panchakarma` | Chemistry |
+| 7 | Pharmacy | `/pharmacy` | Catalog |
+| 8 | Billing | `/billing` | Finance |
+| — | Divider | — | Before Reports |
+| 9 | Reports | `/reports` | Analytics |
+| 10 | Settings | `/settings` | Settings |
+
+Active state applies to an exact route and its nested paths (except Dashboard, which is exact only). On desktop, navigation can be collapsed to icon-only mode; tooltips show item names and the footer toggles collapse/expand. Collapse preference is saved under local-storage key `sahachara.sidebar.collapsed`. On mobile, the header button opens a drawer with an overlay; selecting an item or clicking the overlay closes it. See [`enterprise-side-nav.tsx`](../packages/ui/src/components/shell/enterprise-side-nav.tsx) and [`enterprise-shell.tsx`](../packages/ui/src/components/shell/enterprise-shell.tsx).
+
+### Global search palette
+
+The modal is titled **Operational Search** / **Sahachara Ayurveda Operations**. It has a large search field and filters six fixed quick links by label, description, or tag:
+
+- Patient Directory → `/patients`
+- Today’s Appointments → `/appointments`
+- Doctor Consultations → `/consultations`
+- Panchakarma Department → `/panchakarma`
+- Ayurvedic Pharmacy → `/pharmacy`
+- Billing & Invoicing → `/billing`
+
+This is navigation search, not patient-record search: the supplied options are static shortcuts and query filtering is local. Empty matching results show a “No operational items match…” message. See [`global-search-modal.tsx`](../packages/ui/src/components/shell/global-search-modal.tsx).
+
+## 3. Route/page inventory
+
+### Public and system routes
+
+| Route | Page and purpose | Main contents / behavior |
+|---|---|---|
+| `/` | Entry redirect | Redirects to `/login`. |
+| `/login` | Staff sign-in | Branded split image/form layout; staff email and password; email-domain warning and authentication error notifications; sign-in; system overview link; session-check loading state. |
+| `/activate` | Staff first-time activation | Email, 4-digit PIN, password and confirmation; validates domain, PIN length, password length and matching passwords; completion state and explicit account/PIN/attempt/network errors. |
+| `/dashboard` | Operational command center | Four KPIs; quick actions; four operational tabs; schedule, therapy suites, pending clinical tasks and API/auth diagnostic. See detailed description below. |
+| Any unmatched route | Not found | Not-found page with return-to-dashboard action. |
+| Global route error | Error fallback | Reports exception to Sentry; Retry Action and Return to Dashboard. |
+| Route loading | Loading fallback | Shared page loading skeleton. |
+
+Authentication entry files: [`login/page.tsx`](../apps/web/src/app/%28auth%29/login/page.tsx), [`activate/page.tsx`](../apps/web/src/app/%28auth%29/activate/page.tsx). Global error/loading routes: [`error.tsx`](../apps/web/src/app/error.tsx), [`loading.tsx`](../apps/web/src/app/loading.tsx), [`not-found.tsx`](../apps/web/src/app/not-found.tsx).
+
+### Dashboard
+
+Header actions: **Book Appointment**, **Reports & Analytics**, **Refresh Status**.
+
+Four summary cards report:
+
+- Today’s consultations
+- Active Panchakarma
+- Pharmacy dispensations
+- Active staff session
+
+Four tabs:
+
+1. **Appointment Schedule** — today’s rows show time, patient, provider, type, status and actions; has an empty state.
+2. **Panchakarma Therapy Suites** — suite/therapy operational panel. In the current page code the suite list is placeholder data.
+3. **Pending Clinical Tasks** — task panel. Its task list is also placeholder data.
+4. **System Health / API Auth** — API/auth diagnostic action with a visible success/error notification.
+
+Appointment and summary data are fetched. Summary failure is converted to a null summary; appointment fetch failure is logged, while the API diagnostic gives a visible notification. Replicating behavior should preserve this distinction unless intentionally improved. Source: [`dashboard/page.tsx`](../apps/web/src/app/dashboard/page.tsx).
+
+### Patients
+
+| Route | Page contents / actions |
+|---|---|
+| `/patients` | Registry table: patient number, name/info, phone, email, status, registered date, actions. Add patient, refresh, active/inactive/all status filter, row navigation/actions, empty/error handling. |
+| `/patients/new` | Shared patient form for new record. |
+| `/patients/[id]` | Patient record with header actions (book appointment, edit, all patients, refresh) and tabs: Overview, Appointments, Clinical, Treatments, Panchakarma, Prescriptions, Pharmacy, Billing. Overview/history views provide patient-linked appointments, consultations, assessments, treatment plans, courses/sessions, prescriptions, dispensations, invoices and payment receipts with links and empty states. “Treatments & Therapies Shell” is explicitly a placeholder empty state. |
+| `/patients/[id]/edit` | Shared patient form prefilled for editing. |
+
+The shared form captures name, demographic/contact details, emergency contact and record status, with submit/cancel and submission error notification. Patient numbering is organization-scoped and sequential (API-generated). Sources: [`patients/page.tsx`](../apps/web/src/app/patients/page.tsx), [`patients/[id]/page.tsx`](../apps/web/src/app/patients/%5Bid%5D/page.tsx), [`patient-form.tsx`](../apps/web/src/components/patients/patient-form.tsx).
+
+### Appointments
+
+| Route | Page contents / actions |
+|---|---|
+| `/appointments` | Today’s operational schedule plus appointment registry. Registry columns: date/time, patient, clinical provider, type, status, reason/chief complaint, actions. New appointment, refresh, status and modality filters; empty/error states. |
+| `/appointments/new` | Shared scheduling form. |
+| `/appointments/[id]` | Appointment detail and status; view/start consultation, edit, return to list, refresh and cancel; start/cancel dialogs. |
+| `/appointments/[id]/edit` | Shared scheduling form prefilled for edit. |
+
+Form fields include patient and provider, date/time, modality, status, reason and notes. Scheduling conflict failures are surfaced to the user. Source: [`appointments/page.tsx`](../apps/web/src/app/appointments/page.tsx), [`appointments/[id]/page.tsx`](../apps/web/src/app/appointments/%5Bid%5D/page.tsx), [`appointment-form.tsx`](../apps/web/src/components/appointments/appointment-form.tsx).
+
+### Consultations and clinical assessment
+
+| Route | Page contents / actions |
+|---|---|
+| `/consultations` | Encounter registry with date, patient, provider, modality, status, chief complaint and actions; appointment-driven workflow notice; status filter; start from appointment; refresh; error state. |
+| `/consultations/[id]` | Encounter detail, complete, edit notes, cancel, create prescription, all consultations, refresh. Completed/cancelled records show read-only notices; completion/cancel confirmation dialogs. |
+| `/consultations/[id]/edit` | Consultation edit form. |
+
+Consultation form fields include chief complaint (required), clinical notes, blood pressure, pulse, temperature, weight, height and status. Status selection can finalize/lock the encounter.
+
+The Ayurvedic assessment form is rendered within the clinical workflow. It includes Prakriti/Vikriti, severity, Agni/Ama, examination accordions (including tongue, bowel, pulse, skin and build), lifestyle and diagnosis/prognosis/pathogenesis fields, save/finalize controls and finalization confirmation. Assessment is not a separate sidebar route in the current route inventory. Sources: [`consultations/page.tsx`](../apps/web/src/app/consultations/page.tsx), [`consultations/[id]/page.tsx`](../apps/web/src/app/consultations/%5Bid%5D/page.tsx), [`consultation-form.tsx`](../apps/web/src/components/consultations/consultation-form.tsx), [`ayurvedic-assessment-form.tsx`](../apps/web/src/components/assessments/ayurvedic-assessment-form.tsx).
+
+### Treatment plans
+
+| Route | Page contents / actions |
+|---|---|
+| `/treatments` | Treatment-plan registry with date, patient, prescribing doctor, objective, therapies, status and actions; empty state and links to consultation/detail. |
+| `/treatment-plans/[id]` | Plan detail and item table; activate, complete, cancel, initiate Panchakarma course, author prescription, view consultation, refresh. Add-item form/modal supports therapy, procedure, diet, lifestyle and general categories plus frequency/duration fields. Confirmation dialogs and status notices distinguish assessment-pending, active/locked, completed/locked and cancelled. |
+
+Plan activation requires a completed assessment and at least one plan item. Active/completed plans have locking behavior in the UI and API. Source: [`treatments/page.tsx`](../apps/web/src/app/treatments/page.tsx), [`treatment-plans/[id]/page.tsx`](../apps/web/src/app/treatment-plans/%5Bid%5D/page.tsx), [`treatment-plan-workspace.tsx`](../apps/web/src/components/treatment-plans/treatment-plan-workspace.tsx).
+
+### Panchakarma
+
+| Route | Page contents / actions |
+|---|---|
+| `/panchakarma` | Course registry table: course type, patient, objective, planned window, stage, status and actions; create course, therapist day queue, refresh; empty state. |
+| `/panchakarma/queue` | Therapist daily session queue with search, refresh, course-registry link, empty state and session actions including no-show; patient/course navigation; action dialogs capture patient response/tolerance and checkboxes. |
+| `/panchakarma/courses/new` | New course form; choose active treatment plan or consultation and course type (including Vamana, Virechana, Basti, Nasya and Raktamokshana); validation and save/cancel. |
+| `/panchakarma/courses/[id]` | Course detail with session table and course/session controls; dialogs schedule/assign sessions, record tolerance, and perform lifecycle actions. |
+
+The API links the course to a patient, consultation and treatment plan; course scheduling requires an active treatment plan. Session scheduling checks therapist conflicts. Sources: [`panchakarma/page.tsx`](../apps/web/src/app/panchakarma/page.tsx), [`panchakarma/queue/page.tsx`](../apps/web/src/app/panchakarma/queue/page.tsx), [`panchakarma/courses/new/page.tsx`](../apps/web/src/app/panchakarma/courses/new/page.tsx), [`panchakarma/courses/[id]/page.tsx`](../apps/web/src/app/panchakarma/courses/%5Bid%5D/page.tsx).
+
+### Pharmacy
+
+| Route | Page contents / actions |
+|---|---|
+| `/pharmacy` | Two tabs: **Inventory & Physical Stock** and **Prescription Registry**. Inventory search/filter (including dosage form and checkboxes), stock/formulation table, receive stock and adjust-stock modals. Prescription status filter/table. Header actions: receive stock, author prescription, pharmacist queue, refresh. |
+| `/pharmacy/queue` | Dispensing queue with empty state, refresh/all-prescriptions links and dispense action/modal. |
+| `/pharmacy/prescriptions/new` | Prescription form with patient/clinical linkage and medication rows; medicine, dosage, frequency, duration and route fields; save draft or save/activate. |
+| `/pharmacy/prescriptions/[id]` | Prescription details plus dispensation table/tabs; activate, dispense, cancel and refresh; confirmation/action dialogs; not-found/error/empty states. |
+| `/pharmacy/dispensations/[id]` | Dispensation detail and item table; start, complete and cancel actions/dialogs. |
+
+Completing a dispensation consumes inventory atomically from batches using FEFO and records stock movements. Sources: [`pharmacy/page.tsx`](../apps/web/src/app/pharmacy/page.tsx), [`pharmacy/queue/page.tsx`](../apps/web/src/app/pharmacy/queue/page.tsx), [`pharmacy/prescriptions/new/page.tsx`](../apps/web/src/app/pharmacy/prescriptions/new/page.tsx), [`pharmacy/prescriptions/[id]/page.tsx`](../apps/web/src/app/pharmacy/prescriptions/%5Bid%5D/page.tsx), [`pharmacy/dispensations/[id]/page.tsx`](../apps/web/src/app/pharmacy/dispensations/%5Bid%5D/page.tsx).
+
+### Billing
+
+| Route | Page contents / actions |
+|---|---|
+| `/billing` | Six KPIs: outstanding, today’s collections, issued/open, partially paid, settled and draft. Quick links to invoices, payments and new invoice; recent invoice/payment tables; loading, error and empty states. |
+| `/billing/invoices` | Invoice registry, status filter, create action, table, no-results/error states. |
+| `/billing/invoices/new` | Patient and invoice metadata; line items with service category, quantity, pricing, discount and tax; totals; save controls and submission errors. |
+| `/billing/invoices/[id]` | Invoice detail, line items and allocated-payment tables; payment and print actions; payment modal with method/reference; success/error and empty-payment states. |
+| `/billing/payments` | Payment registry filtered by method/status; receipt number, patient, date, amount, channel, reference, cashier, status and actions. |
+| `/billing/payments/[id]` | Payment details, allocations, operation/success messages and action modal. |
+| `/billing/receipts/[id]` | Receipt view with print, back/details and unavailable state. |
+
+Payments can be allocated to invoices. Voiding a payment recalculates invoice balances; it is a distinct lifecycle action rather than deletion. Sources: [`billing/page.tsx`](../apps/web/src/app/billing/page.tsx), [`billing/invoices/page.tsx`](../apps/web/src/app/billing/invoices/page.tsx), [`billing/invoices/new/page.tsx`](../apps/web/src/app/billing/invoices/new/page.tsx), [`billing/invoices/[id]/page.tsx`](../apps/web/src/app/billing/invoices/%5Bid%5D/page.tsx), [`billing/payments/page.tsx`](../apps/web/src/app/billing/payments/page.tsx), [`billing/payments/[id]/page.tsx`](../apps/web/src/app/billing/payments/%5Bid%5D/page.tsx), [`billing/receipts/[id]/page.tsx`](../apps/web/src/app/billing/receipts/%5Bid%5D/page.tsx).
+
+### Reports
+
+`/reports` is a shared reporting workspace; each nested route selects its initial report tab:
+
+| Route | Report tab |
+|---|---|
+| `/reports` | Overview |
+| `/reports/patients` | Patients |
+| `/reports/appointments` | Appointments |
+| `/reports/clinical` | Clinical |
+| `/reports/treatments` | Treatments |
+| `/reports/panchakarma` | Panchakarma |
+| `/reports/pharmacy` | Pharmacy |
+| `/reports/financial` | Financial |
+| `/reports/providers` | Providers |
+
+The workspace provides date range controls and presets, refresh, CSV export and error notification. Tabs render metrics, filters/search/pagination, tables/ledgers and row navigation where implemented. Data covers patient registrations, appointments, encounters, treatment plans, Panchakarma, pharmacy dispensations, financial settlements and provider workload. `Daily Operations` is an additional workspace tab (the route list does not contain a separate `/reports/daily` page). Overview and Daily Operations receive financial-visibility state.
+
+Source: [`reports-workspace.tsx`](../apps/web/src/components/reports/reports-workspace.tsx), and tab implementations in [`apps/web/src/components/reports/`](../apps/web/src/components/reports/).
+
+### Settings and administration
+
+`/settings` is a shared tabbed workspace, with nested routes selecting the initial tab:
+
+| Route | Tab |
+|---|---|
+| `/settings` | Overview |
+| `/settings/organization` | Organization Profile |
+| `/settings/staff` | Staff Management |
+| `/settings/staff/new` | New staff workflow |
+| `/settings/staff/[id]` | Staff detail/workflow |
+| `/settings/audit-logs` | Audit Logs |
+| `/settings/configuration` | Configuration |
+| `/settings/profile` | My Profile |
+| `/settings/security` | Security & Sessions |
+
+Tabs are loaded on selection and have tab-specific loading skeletons and retryable errors. Overview shows staff/session metrics. Organization profile, configuration and personal profile are editable forms with save/error/success states. Configuration covers sequence prefixes; timezone is supplied from `CLINIC_TIMEZONE` (default `Asia/Kolkata`) and currency is currently hard-coded as INR in the API response rather than organization-persisted fields. Security shows role/session summary and active device/browser sessions.
+
+Staff Management provides role/status filters and registry, add staff, regenerate PIN, deactivate/reactivate and change-role controls. Add and activation use separate dialogs. Audit Logs filters actions, lists audit entries and opens a selected-entry detail modal.
+
+For non-admin users, the frontend hides Organization Profile, Staff Management, Audit Logs and Configuration; Overview, My Profile and Security remain visible. Staff role choices include `SUPER_ADMIN` only when the current user is `SUPER_ADMIN`. Sources: [`settings-workspace.tsx`](../apps/web/src/components/settings/settings-workspace.tsx), tab implementations in [`apps/web/src/components/settings/`](../apps/web/src/components/settings/).
+
+### Detailed fields, filters, columns, and dialogs
+
+The following captures source-defined labels and controls most likely to be needed for rebuilding the operational pages. Controls can be conditional on selected records or status.
+
+#### Core forms and registries
+
+| Page / component | Fields, filters, and visible columns |
+|---|---|
+| Patient create/edit | First Name, Middle Name, Last Name, Preferred / Alias Name, Date of Birth, Gender; Primary Phone Number, Alternate Phone Number, Email Address; Street Address, City / Town, State / Province, Country, Postal Code / PIN; Emergency Contact Name, Emergency Contact Phone, Relationship; Patient Record Status (ACTIVE/INACTIVE). Save/cancel and submission-error notification. |
+| Patient registry | Search by patient number/name/phone/email; status filter All/Active/Inactive. Columns: Patient Number, Patient Name & Info, Phone, Email, Status, Registered, Actions. |
+| Appointment create/edit | Patient (fixed or searchable selector), Clinical Provider / Doctor, Appointment Date, Start Time, End Time, Appointment Type (Consultation, Follow-up, Therapy, Panchakarma, Other), Appointment Status (Scheduled, Confirmed, In Progress, Completed, Cancelled, No Show), Reason for Appointment / Chief Complaint, Internal Notes / Patient Instructions. |
+| Appointment registry/detail dialogs | Search by patient name/number, doctor, or reason; status and type filters. Columns: Date & Time, Patient, Clinical Provider, Type, Status, Reason / Chief Complaint, Actions. **Start Clinical Consultation** dialog asks Chief Complaint / Presenting Symptoms; **Cancel Appointment Booking** asks Cancellation Reason. |
+| Consultation | Chief Complaint (required), Clinical Notes; Systolic BP, Diastolic BP, Pulse Rate, Temperature, Body Weight, Height; Status (Draft, In Progress, Completed, Cancelled); save/finalize actions. |
+| Assessment | Prakriti/Vikriti, severity, Agni/Ama, examination accordions (tongue, bowel, pulse, skin, build), lifestyle and diagnosis/prognosis/pathogenesis fields; save and finalize confirmation. See [`ayurvedic-assessment-form.tsx`](../apps/web/src/components/assessments/ayurvedic-assessment-form.tsx) for the full control tree. |
+| Treatment-plan detail | Therapeutic Objective, General Instructions, Dietary Guidance, Lifestyle Guidance, Planned Follow-up Date. Add-item modal: Treatment / Therapy Name, Category, Frequency, Custom Frequency Notes, Duration Unit, Instructions & Precautions. Activate, Complete and Cancel dialogs. |
+| New Panchakarma course | Active Treatment Plan (mandatory), Consultation Encounter, Course Type / Shodhana Karma, Planned Start Date, Planned Target End Date, Clinical Therapeutic Objective, General Instructions / Precautions, Purvakarma, Pradhanakarma and Paschatkarma stage instructions. |
+| New prescription | Clinical Consultation, optional Associated Treatment Plan, Prescription General Notes / Dietary Pathya Advice. Each medicine line: Medicine / Formulation Name, Medicine Form, Strength / Potency, Clinician Dosage, Frequency, Frequency Notes / Anupana, Duration and unit, Quantity to Dispense, Specific Intake Instructions / Pathya. |
+| Pharmacy stock | Receive-stock modal fields: medicine/formulation, dosage form, strength/specification, unit, batch/lot, expiry, quantity, reorder threshold, unit cost, supplier, SKU, received date, remarks. Adjustment modal: type, quantity, mandatory reason and operational notes. |
+| New invoice | Patient, Invoice Date, optional Due Date, Invoice Notes / Special Billing Terms. Repeatable line item: Service / Medicine Description, Category (Consultation/Treatment/Panchakarma/Therapy/Pharmacy/Other), Quantity, Unit Price, Discount and Tax/GST; add/remove item and totals. |
+| Invoice registry / payment dialog | Invoice search by invoice number, patient name or ID; status filter All/Draft/Issued/Partially Paid/Paid/Cancelled. Columns: Invoice Number, Patient Name / ID, Invoice Date, Due Date, Total, Paid, Balance Due, Status, Actions. **Record Payment** modal: Payment Amount, Payment Method, Reference Number, Cashier Remarks / Notes. **Cancel Invoice** asks Cancellation Reason. |
+| Payment registry | Method filter (UPI, Cash, Card, Bank Transfer, Cheque); status filter (Recorded, Voided). Columns: Receipt / Payment #, Patient Name / ID, Date, Amount, Channel, Ref #, Received By, Status, Actions. |
+
+These controls are implemented in [`patient-form.tsx`](../apps/web/src/components/patients/patient-form.tsx), [`appointment-form.tsx`](../apps/web/src/components/appointments/appointment-form.tsx), [`consultation-form.tsx`](../apps/web/src/components/consultations/consultation-form.tsx), [`treatment-plans/[id]/page.tsx`](../apps/web/src/app/treatment-plans/%5Bid%5D/page.tsx), [`panchakarma/courses/new/page.tsx`](../apps/web/src/app/panchakarma/courses/new/page.tsx), [`pharmacy/prescriptions/new/page.tsx`](../apps/web/src/app/pharmacy/prescriptions/new/page.tsx), [`pharmacy/page.tsx`](../apps/web/src/app/pharmacy/page.tsx), and [`billing/invoices/new/page.tsx`](../apps/web/src/app/billing/invoices/new/page.tsx).
+
+#### Settings and report details
+
+| Tab | Fields, filters, columns, and actions |
+|---|---|
+| Organization Profile | Read-only Organization Code, Organization Slug, Clinic Timezone and Operating Status. Editable Organization / Clinic Name, Contact Email, Contact Phone, Hospital Address, City, State, Country, Postal Code; Save Organization Profile. |
+| Configuration | Editable Patient ID Prefix, Invoice Number Prefix, Receipt Number Prefix. Read-only Clinic Operating Timezone and Billing Currency; Save System Configuration. |
+| My Profile | Editable Your Full Name. Read-only Authentication Email Address, System Role, Hospital Branch, Account Status, Account Created; Save Profile Details. |
+| Staff Management | Search Staff; role filter; status filter All/Active/Pending Activation/Deactivated. Columns Name, Email, Role, Status, Active Sessions, Registered On, Actions. Actions include Change Role, conditional Regenerate PIN, Deactivate/Activate. Add Staff modal: Full Name, Staff Email Address, Assigned System Role, “Set account as Active immediately” checkbox; activation/PIN delivery, PIN regeneration, deactivate/reactivate and role-change dialogs. |
+| Audit Logs | Search Audit Trail by actor/entity type/ID; action filter All/Create/Update/Status Change/Export/Login/Logout; Refresh. Columns Timestamp, Actor, Role, Action, Entity Type / ID, Details. View Details opens Audit Event Details modal. |
+| Security & Sessions | Session columns: Session, IP Address, Device / Browser, Logged In At, Expires At; Refresh Sessions. |
+| Reports—Patients | Status filter and search by name/number/phone. Columns Patient No., Patient Name, Gender, Phone, Status, Registration Date, Appointments, Invoices. |
+| Reports—Appointments | Status/type filters and search by patient/provider. Columns Date, Time Slot, Patient Name, Provider, Type, Status, Reason / Chief Complaint. |
+| Reports—Clinical | Status filter and search by doctor/patient. Columns Date, Patient Name, Ayurvedic Doctor, Encounter Status, Assessment Done, Treatment Plan, Prescription. |
+| Reports—Treatments | Status/category filters and search by patient/doctor. Columns Plan No., Created Date, Patient Name, Prescribing Doctor, Plan Status, Regimen Items. |
+| Reports—Panchakarma | Status/Karma Type filters and search by patient/doctor. Columns Course No., Patient Name, Shodhana Karma / Course, Supervising Vaidya, Course Status, Therapy Sessions. |
+| Reports—Pharmacy | Status filter and search by patient/pharmacist. Columns Dispensation No., Dispensation Date, Patient Name, Pharmacist, Dispensation Status, Medicines Count, Prescription Ref. |
+| Reports—Financial | Status/payment-method filters and search by invoice number/patient. Columns Date, Invoice No., Patient Name, Status, Total (INR), Paid (INR), Due (INR). |
+| Reports—Providers | Role filter and search by provider name/email. Columns Provider Name, Staff Role, Email, Appointments, Consultations, Treatment Plans, Therapy Sessions. |
+| Reports—Daily Operations | Select Date; metric-card groups rather than a table. |
+
+All report tabs share period presets, From/To date inputs, Refresh and Export CSV. These report views and settings controls are in [`reports/`](../apps/web/src/components/reports/) and [`settings/`](../apps/web/src/components/settings/).
+
+## 4. End-to-end operational workflows
+
+### A. Staff access
+
+1. A provisioned staff member opens `/activate`, supplies staff email, four-digit PIN, new password and confirmation.
+2. On successful activation, the staff member signs in on `/login` with email/password.
+3. The web app's auth/session state is passed to the shell (name, email, role and organization identifier). Sign-out returns to login.
+4. Backend auth validates session expiry and active-account state. User role and organization context are server-derived; access is not intended to trust organization IDs from the browser.
+
+### B. Patient visit and care plan
+
+1. Register a patient (or select an existing patient from the patient directory/record).
+2. Create and schedule an appointment by patient, provider, date/time and visit details. API checks patient/provider eligibility and schedule overlap.
+3. Open the appointment and start a consultation. The encounter is tied to the appointment; creating it transitions a scheduled/confirmed appointment to `IN_PROGRESS`.
+4. Record chief complaint, clinical notes and vital signs. Complete the encounter when finished; completed consultations are read-only.
+5. Create/update an Ayurvedic assessment for that consultation, then finalize it. Finalization marks the assessment complete and locks subsequent edits.
+6. Create a treatment plan linked to the assessment/consultation. Add plan items, then activate the plan when the assessment is complete and the plan has at least one item. Plan status/actions indicate draft, active, completed or cancelled.
+7. From a plan or consultation, proceed to Panchakarma course and/or prescription workflows where clinically appropriate.
+
+The UI provides these links/actions in appointment detail, consultation detail, patient history, and treatment-plan detail; do not model them as a single wizard unless intentionally changing the existing UX.
+
+### C. Panchakarma therapy
+
+1. Create a course connected to an active treatment plan (or select a consultation where the form permits).
+2. Schedule sessions and assign therapist/date/time.
+3. Use the daily therapist queue for start, complete, cancel or no-show actions; record response/tolerance in the relevant dialogs.
+4. The API checks therapist scheduling conflicts and enforces course/session lifecycle actions.
+
+### D. Prescription and dispensing
+
+1. Author a prescription linked to the patient/consultation and optionally a treatment plan; save draft or activate.
+2. Queue/prepare a dispensation from its prescription.
+3. Start and complete or cancel the dispensation. On completion, API consumes suitable stock batches using FEFO and records movements.
+4. Use prescription and dispensation details to review the prescription, fulfillment items and status.
+
+### E. Invoice and payment
+
+1. Create an invoice for a patient and add priced line items, discounts/taxes as applicable.
+2. Issue the invoice; review item details and payment allocations.
+3. Record payment(s), allocate them to one or more invoices, and view/print receipt.
+4. If authorized, void a payment; the server recalculates affected invoice balances atomically. Paid invoices and voided payments are not ordinary editable/deletable records.
+
+### F. Reports, configuration, and oversight
+
+- Reports filter by date range and report domain; CSV export is available through the report API. Financial and other sensitive report access is role-dependent.
+- Admin/Super Admin users manage organization profile, staff, role, activation, audit logs, and sequence configuration.
+- All users have profile/security views; audit entries are read-only records.
+
+## 5. Domain model and API surface
+
+All API paths below are relative to `/api/v1`. Successful responses use an envelope `{ success, data, timestamp }`; error responses have status/message/error/timestamp/path fields and may include validation details. DTO validation transforms input, whitelists declared fields, and rejects non-whitelisted properties.
+
+| Module | Main records and operations |
+|---|---|
+| Auth/Health | `GET /health`; `GET /auth/me`; `POST /auth/activate`; Better Auth session/cookie or bearer token authentication. |
+| Patients | `POST/GET /patients`, `GET /patients/:id`, `PATCH /patients/:id`; paginated/searchable registry and profile/status maintenance. |
+| Appointments | Create/list/today/providers/detail/update/cancel under `/appointments`; schedule conflict checks; explicit cancellation. |
+| Consultations | Create/list/detail/update/complete/cancel under `/consultations`; links encounter to appointment. |
+| Assessments | Create/list/detail/update/finalize under `/assessments`; unique per consultation and finalization lock. |
+| Treatment plans | Create/list/detail/update and activate/complete/cancel under `/treatment-plans`; items, consultation and patient history. |
+| Panchakarma | Course and session create/list/detail/update; schedule/start/complete/cancel/no-show actions; daily queue and patient history. |
+| Pharmacy | Prescriptions, dispensations, medicine stock, stock adjustments, stock movements, and queue; complete dispensation consumes batches. |
+| Billing | Summary, invoices, invoice items, issue/cancel, payments, allocations, receipt and payment void. |
+| Reports | Summary/executive summary, patients, appointments, clinical, treatments, Panchakarma, pharmacy, financial, providers, daily; CSV export. |
+| Settings | Overview, organization, staff, roles, activation/PIN, audit logs, configuration, profile and security/session summary. |
+
+Primary data chain:
+
+`Organization → Patient → Appointment → Consultation → Ayurvedic Assessment → Treatment Plan + Items → Panchakarma Course / Sessions and Prescription → Dispensation / Inventory → Invoice / Payment`
+
+These are related records, not all mandatory sequential steps for every patient. In particular, pharmacy, Panchakarma and billing can be separate operational branches. Core models live in [`schema.prisma`](../apps/api/prisma/schema.prisma); endpoint/controller contracts are in each module under [`apps/api/src/`](../apps/api/src/).
+
+## 6. Roles, visibility, and operational constraints
+
+Roles in the system include `SUPER_ADMIN`, `ADMIN`, `DOCTOR`, `THERAPIST`, `PHARMACIST`, `RECEPTIONIST`, and `ACCOUNTANT`.
+
+- Sidebar currently lists the same destinations without role filtering. Settings and report tabs have client-side role-based visibility as described above.
+- Server API authorization is authoritative. Controller actions declare role requirements; `SUPER_ADMIN` bypasses role lists, but organization-scoped services still require tenant context where applicable.
+- Broad API role pattern: clinical write actions are for admin/super-admin/doctor/therapist (some appointment writes also allow reception); pharmacy execution/inventory writes are pharmacist/admin; billing writes are accountant/reception/admin, and payment void is narrower. Individual routes may differ; see controller decorators.
+- Patients, appointments, consultations, assessments, plans, therapy, prescriptions, dispensations, invoices and payments are organization-scoped. The organization context comes from the authenticated user/session.
+- Scheduling checks appointment overlap; therapy sessions check therapist overlap. Terminal clinical/financial states have explicit lock/void/cancel behavior.
+- Clinic timezone defaults to `Asia/Kolkata`. API date-range utilities use clinic-local day boundaries for operational dates.
+
+## 7. Replica acceptance checklist
+
+Use this as a practical completion test for a new implementation:
+
+- [ ] Reproduce public login and activation pages, validation states, error states, and post-login shell.
+- [ ] Match header controls, exact sidebar labels/routes/order/divider/active state, desktop collapse persistence, mobile drawer, and search shortcut/modal.
+- [ ] Implement all routes in the route tables above, including nested detail/edit/create pages and report/settings tabs.
+- [ ] Recreate page headers/actions, tables, tabs, metric cards, forms, dialogs, status chips, loading/error/empty/not-found states.
+- [ ] Support patient → appointment → consultation → assessment → plan workflow and status-based locking.
+- [ ] Support therapy course/session queues, prescription/dispensation, stock movement, invoices, payment allocations and receipts.
+- [ ] Implement role-conditioned settings/report visibility and enforce permissions server-side.
+- [ ] Preserve API pagination, data relationships, tenant scope, status transitions, schedule checks, timezone handling, audit trails and CSV export.
+- [ ] Verify desktop collapsed/expanded and mobile drawer behavior; test populated, empty, loading, error, and terminal-record states.
+
+## 8. Evidence limits and notes for an exact visual clone
+
+This report is grounded in checked-in source; no authenticated browser session or production data was available. Therefore:
+
+- The exact populated records, value formatting and data-specific badges cannot be specified from source alone.
+- The shared Carbon primitives and `g10`/`g100` theme are clear, but a pixel-exact screenshot specification needs browser captures at defined viewport sizes and data fixtures.
+- Some dashboard panels are placeholders. The patient “Treatments & Therapies Shell” is explicitly a placeholder. Do not invent server-backed behavior for these panels.
+- `settings/staff/new` and `settings/staff/[id]` route to the shared Staff Management tab; they are not distinct create/detail pages. Staff creation and role-management controls live in that tab and its dialogs.
+- Report subroutes are alternate entry URLs into the same reports workspace, each choosing a starting tab. `/treatments` is the plan registry, not a therapy catalog.
+- UI role visibility does not prove backend authorization; preserve server-side guards separately.
+- The old architecture audit document contains dated test-readiness claims; this report does not treat them as evidence of current UI behavior.
+For exact form labels, required/optional status, field constraints and interaction wording, consult the linked page and component sources. The web application is authoritative for layout and visible controls; API DTOs/controllers/services are authoritative for validation, permissions, lifecycle rules, and persistence.

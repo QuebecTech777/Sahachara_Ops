@@ -1,0 +1,18 @@
+-- AlterTable
+ALTER TABLE "hospital_tariffs" ALTER COLUMN "rate" SET DATA TYPE DECIMAL(12,2);
+
+-- AlterTable
+ALTER TABLE "invoices" ADD COLUMN     "balance" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN     "paidAmount" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ALTER COLUMN "subtotal" SET DATA TYPE DECIMAL(12,2),
+ALTER COLUMN "insuranceCovered" SET DATA TYPE DECIMAL(12,2),
+ALTER COLUMN "copayPatient" SET DATA TYPE DECIMAL(12,2),
+ALTER COLUMN "totalAmount" SET DATA TYPE DECIMAL(12,2);
+
+-- AlterTable
+ALTER TABLE "medication_stock" ALTER COLUMN "unitPrice" SET DATA TYPE DECIMAL(12,2);
+
+-- AlterTable
+ALTER TABLE "rate_histories" ALTER COLUMN "previousRate" SET DATA TYPE DECIMAL(12,2),
+ALTER COLUMN "newRate" SET DATA TYPE DECIMAL(12,2);
+
