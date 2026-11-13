@@ -283,26 +283,40 @@ export async function ensureDefaultDatabaseUsers() {
       if (existingSuperAdmin) {
         console.log(`[Prisma Bootstrap] Privileged account already exists (${existingSuperAdmin.email}). Silent recreation prevented.`);
       } else {
-        // Initial setup requires secure credential
-        const initialPassword = process.env.INITIAL_SUPER_ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD;
-        if (isProduction && (!initialPassword || initialPassword.length < 12 || initialPassword === 'Admin@Sahachara2026!')) {
-          throw new Error('FATAL: Production SUPER_ADMIN bootstrap requires a secure INITIAL_SUPER_ADMIN_PASSWORD environment variable (minimum 12 characters, no hardcoded defaults). Refusing initialization.');
+        // Initial bootstrap requires explicit configuration in production; no silent administrator creation
+        const configuredEmail = process.env.INITIAL_SUPER_ADMIN_EMAIL?.trim();
+        const configuredName = process.env.INITIAL_SUPER_ADMIN_NAME?.trim();
+        const configuredPassword = (process.env.INITIAL_SUPER_ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD)?.trim();
+
+        if (isProduction) {
+          if (!configuredEmail || !validateSahacharaEmail(configuredEmail)) {
+            throw new Error(`FATAL: Production SUPER_ADMIN bootstrap requires an explicit and valid INITIAL_SUPER_ADMIN_EMAIL environment variable ending with @${CLINIC_METADATA.emailDomain}. Refusing silent administrator creation.`);
+          }
+          if (!configuredName || configuredName.length < 2) {
+            throw new Error('FATAL: Production SUPER_ADMIN bootstrap requires an explicit INITIAL_SUPER_ADMIN_NAME environment variable (minimum 2 characters). Refusing silent administrator creation.');
+          }
+          if (!configuredPassword || configuredPassword.length < 12 || configuredPassword === 'Admin@Sahachara2026!' || configuredPassword === 'Secure@HospitalSuperAdmin2026!#') {
+            throw new Error('FATAL: Production SUPER_ADMIN bootstrap requires a secure INITIAL_SUPER_ADMIN_PASSWORD environment variable (minimum 12 characters, no hardcoded defaults). Refusing initialization.');
+          }
         }
-        const finalPassword = initialPassword || 'Secure@HospitalSuperAdmin2026!#';
+
+        const finalEmail = (configuredEmail || 'alexander.wright@sahachara.com').toLowerCase();
+        const finalName = configuredName || 'Alexander Wright';
+        const finalPassword = configuredPassword || 'Secure@HospitalSuperAdmin2026!#';
         const superAdminHash = bcrypt.hashSync(finalPassword, 12);
 
         await prisma.user.create({
           data: {
             id: 'usr-superadmin',
-            email: process.env.INITIAL_SUPER_ADMIN_EMAIL || 'alexander.wright@sahachara.com',
-            name: process.env.INITIAL_SUPER_ADMIN_NAME || 'Alexander Wright',
+            email: finalEmail,
+            name: finalName,
             role: 'SUPER_ADMIN',
             passwordHash: superAdminHash,
             status: 'active',
             department: 'Executive Governance & Technology'
           }
         });
-        console.log('[Prisma Bootstrap] Initial SUPER_ADMIN account bootstrapped securely.');
+        console.log(`[Prisma Bootstrap] Initial SUPER_ADMIN account (${finalEmail}) bootstrapped securely.`);
       }
 
       // 2. Ensure default hospital tariffs (with null rates for unconfigured beds/triage)

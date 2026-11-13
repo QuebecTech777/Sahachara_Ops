@@ -4,6 +4,7 @@ import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes.ts';
 import { isSupabaseServerActive } from './server/supabaseServer.ts';
+import { getSessionSecret } from './server/rbacMiddleware.ts';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,6 +12,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
+  // Fail-closed production configuration guard
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      getSessionSecret();
+    } catch (err: any) {
+      console.error(`[Sahachara Ops Fatal Configuration Error] ${err.message}`);
+      process.exit(1);
+    }
+  }
+
   const app = express();
   const server = http.createServer(app);
   const PORT = Number(process.env.PORT) || 3000;

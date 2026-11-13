@@ -15,6 +15,10 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      - key: INITIAL_SUPER_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_SUPER_ADMIN_NAME
+        sync: false
       - key: INITIAL_SUPER_ADMIN_PASSWORD
         sync: false
       - key: SUPABASE_URL

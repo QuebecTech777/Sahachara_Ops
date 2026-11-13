@@ -4,7 +4,19 @@ import { UserRole, VALID_USER_ROLES } from '../src/types/hospital.ts';
 import { hospitalStore } from './dataStore.ts';
 import { verifySupabaseToken } from './supabaseServer.ts';
 
-const SESSION_SECRET = process.env.SESSION_SECRET || 'sahachara-clinical-ops-production-secret-2026';
+export function getSessionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.trim() === '') {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'FATAL CONFIGURATION ERROR: SESSION_SECRET environment variable is missing or empty in production. Application startup aborted to prevent insecure session token generation.'
+      );
+    }
+    // Safe development/test fallback when explicitly running in non-production environments
+    return 'sahachara-clinical-ops-development-secret-2026';
+  }
+  return secret.trim();
+}
 
 export function isValidUserRole(role: unknown): role is UserRole {
   return typeof role === 'string' && VALID_USER_ROLES.includes(role as UserRole);
@@ -24,7 +36,7 @@ export function generateSessionToken(payload: Omit<TokenPayload, 'exp'>, expires
   const fullPayload: TokenPayload = { ...payload, exp };
   const encodedPayload = Buffer.from(JSON.stringify(fullPayload)).toString('base64url');
   const signature = crypto
-    .createHmac('sha256', SESSION_SECRET)
+    .createHmac('sha256', getSessionSecret())
     .update(encodedPayload)
     .digest('base64url');
   return `sah_${encodedPayload}.${signature}`;
@@ -40,7 +52,7 @@ export function verifySessionToken(token: string): { valid: boolean; payload?: T
   }
   const [encodedPayload, signature] = parts;
   const expectedSignature = crypto
-    .createHmac('sha256', SESSION_SECRET)
+    .createHmac('sha256', getSessionSecret())
     .update(encodedPayload)
     .digest('base64url');
 
