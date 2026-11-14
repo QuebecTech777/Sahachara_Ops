@@ -114,7 +114,7 @@ async function runVerification() {
   const baseUrl = `http://127.0.0.1:${port}/api`;
 
   const tokens = {
-    SUPER_ADMIN: generateSessionToken({ userId: 'usr-superadmin', email: 'alexander.wright@sahachara.com', name: 'Alexander Wright', role: 'SUPER_ADMIN' }),
+    SUPER_ADMIN: generateSessionToken({ userId: 'usr-superadmin', email: 'systems@sahachara.com', name: 'Sahachara Systems', role: 'SUPER_ADMIN' }),
     ADMIN: generateSessionToken({ userId: 'usr-admin', email: 'admin.ops@sahachara.com', name: 'Marcus Sterling', role: 'ADMIN' }),
     DOCTOR: generateSessionToken({ userId: 'usr-doc', email: 'robert.rivera@sahachara.com', name: 'Dr. Robert Rivera', role: 'DOCTOR' }),
     VAIDYA: generateSessionToken({ userId: 'usr-vaidya', email: 'sarah.chen@sahachara.com', name: 'Dr. Sarah Chen', role: 'VAIDYA' }),
@@ -500,7 +500,7 @@ async function runVerification() {
       headers: {
         'Content-Type': 'application/json',
         'X-User-Role': 'SUPER_ADMIN',
-        'X-User-Email': 'alexander.wright@sahachara.com'
+        'X-User-Email': 'systems@sahachara.com'
       },
       body: JSON.stringify({ firstName: 'Spoof', lastName: 'Attempt', phone: '+91 97777 99999', gender: 'Male' })
     });
@@ -534,8 +534,8 @@ async function runVerification() {
     assert(dbUnlinked?.status === 'archived', 'Status is "archived"');
     assert(dbUnlinked?.deletedAt === null, 'deletedAt is NULL (not soft-deleted)');
     assert(Boolean(dbUnlinked?.archivedAt), 'archivedAt timestamp recorded');
-    assert(dbUnlinked?.archivedById === 'Alexander Wright', 'archivedById recorded');
-    assert(dbUnlinked?.archivedByName === 'Alexander Wright', 'archivedByName recorded');
+    assert(dbUnlinked?.archivedById === 'Sahachara Systems', 'archivedById recorded');
+    assert(dbUnlinked?.archivedByName === 'Sahachara Systems', 'archivedByName recorded');
     assert(Boolean(dbUnlinked?.archivedReason?.includes('archival')), 'archivedReason preserved');
     assert(dbUnlinked?.mrn === unlinkedMrn, 'MRN is preserved');
 

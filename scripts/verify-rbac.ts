@@ -172,7 +172,7 @@ async function runTests() {
 
   // Generate valid session tokens for each of the 7 permitted roles
   const tokens = {
-    SUPER_ADMIN: generateSessionToken({ userId: 'usr-superadmin', email: 'alexander.wright@sahachara.com', name: 'Alexander Wright', role: 'SUPER_ADMIN' }),
+    SUPER_ADMIN: generateSessionToken({ userId: 'usr-superadmin', email: 'systems@sahachara.com', name: 'Sahachara Systems', role: 'SUPER_ADMIN' }),
     ADMIN: generateSessionToken({ userId: 'usr-admin', email: 'admin.ops@sahachara.com', name: 'Marcus Sterling', role: 'ADMIN' }),
     DOCTOR: generateSessionToken({ userId: 'usr-doc', email: 'robert.rivera@sahachara.com', name: 'Dr. Robert Rivera', role: 'DOCTOR' }),
     VAIDYA: generateSessionToken({ userId: 'usr-vaidya', email: 'sarah.chen@sahachara.com', name: 'Dr. Sarah Chen', role: 'VAIDYA' }),

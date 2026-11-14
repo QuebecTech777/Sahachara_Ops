@@ -85,7 +85,7 @@ async function runVerification() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'alexander.wright@sahachara.com',
+        email: process.env.INITIAL_SUPER_ADMIN_EMAIL || 'systems@sahachara.com',
         password: 'ayur2026'
       })
     });
@@ -103,7 +103,7 @@ async function runVerification() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'alexander.wright@sahachara.com',
+        email: process.env.INITIAL_SUPER_ADMIN_EMAIL || 'systems@sahachara.com',
         password: process.env.INITIAL_SUPER_ADMIN_PASSWORD || 'Secure@HospitalSuperAdmin2026!#'
       })
     });
@@ -445,9 +445,10 @@ async function runVerification() {
     console.log('✓ Invalidation verified: Tokens signed with superseded or invalid secrets are strictly rejected with 401.');
 
     // 9.2 Idempotent bootstrap verification: Ensure restart doesn't overwrite existing superadmin
-    const beforeUser = await prisma.user.findUnique({ where: { email: 'alexander.wright@sahachara.com' } });
+    const superAdminEmail = process.env.INITIAL_SUPER_ADMIN_EMAIL || 'systems@sahachara.com';
+    const beforeUser = await prisma.user.findUnique({ where: { email: superAdminEmail } });
     await ensureDefaultDatabaseUsers();
-    const afterUser = await prisma.user.findUnique({ where: { email: 'alexander.wright@sahachara.com' } });
+    const afterUser = await prisma.user.findUnique({ where: { email: superAdminEmail } });
     if (!beforeUser || !afterUser || beforeUser.passwordHash !== afterUser.passwordHash) {
       throw new Error('FAIL: Superadmin credentials were overwritten by ensureDefaultDatabaseUsers() bootstrap!');
     }

@@ -163,8 +163,10 @@ async function runStaffManagementSuite() {
   const port = (server.address() as any).port;
   const baseUrl = `http://127.0.0.1:${port}`;
 
+  const superAdminEmail = process.env.INITIAL_SUPER_ADMIN_EMAIL || 'systems@sahachara.com';
+  const superAdminName = process.env.INITIAL_SUPER_ADMIN_NAME || 'Sahachara Systems';
   const tokens: Record<string, string> = {
-    SUPER_ADMIN: generateSessionToken({ userId: 'usr-superadmin', email: 'alexander.wright@sahachara.com', role: 'SUPER_ADMIN', name: 'Dr. Alexander Wright' }),
+    SUPER_ADMIN: generateSessionToken({ userId: 'usr-superadmin', email: superAdminEmail, role: 'SUPER_ADMIN', name: superAdminName }),
     ADMIN: generateSessionToken({ userId: 'usr-admin', email: 'admin.ops@sahachara.com', role: 'ADMIN', name: 'Marcus Sterling' }),
     DOCTOR: generateSessionToken({ userId: 'usr-doc', email: 'robert.rivera@sahachara.com', role: 'DOCTOR', name: 'Dr. Robert Rivera' }),
     VAIDYA: generateSessionToken({ userId: 'usr-vaidya', email: 'sarah.chen@sahachara.com', role: 'VAIDYA', name: 'Dr. Sarah Chen' }),
@@ -331,7 +333,7 @@ async function runStaffManagementSuite() {
       // Attempt creation with email already belonging to a User account
       const dupUserCreate = await makeRequest(baseUrl, 'POST', '/api/staff', tokens.SUPER_ADMIN, {
         name: 'Fake Super Admin',
-        email: 'alexander.wright@sahachara.com',
+        email: superAdminEmail,
         role: 'ADMIN',
         department: 'Administration',
         designation: 'Admin',
@@ -504,7 +506,7 @@ async function runStaffManagementSuite() {
       assert(Boolean(roleLog), 'Audit log contains Staff Role Changed entry');
       assert(roleLog.details.includes('from DOCTOR to ADMIN'), 'Audit records previous and new roles (DOCTOR to ADMIN)');
       assert(roleLog.details.includes('Promoted to Clinical Department Administrator'), 'Audit records exact reason');
-      assert(roleLog.actor.includes('Alexander Wright'), 'Audit records actor name');
+      assert(roleLog.actor.includes(superAdminName), 'Audit records actor name');
       assert(roleLog.role === 'SUPER_ADMIN', 'Audit records actor role SUPER_ADMIN');
 
       // 6.3 Self-role elevation prevention
