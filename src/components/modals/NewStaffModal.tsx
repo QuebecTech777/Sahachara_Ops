@@ -23,7 +23,7 @@ export const NewStaffModal: React.FC<NewStaffModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [shift, setShift] = useState<'Morning (07:00-15:00)' | 'Evening (15:00-23:00)' | 'Night (23:00-07:00)' | 'General (09:00-17:00)'>('Morning (07:00-15:00)');
-  const [qualification, setQualification] = useState('BAMS, MD (Ayurveda)');
+  const [qualification, setQualification] = useState('');
   const [status, setStatus] = useState<'on_duty' | 'active' | 'on_leave'>('on_duty');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,32 +36,26 @@ export const NewStaffModal: React.FC<NewStaffModalProps> = ({
       case 'VAIDYA':
         setDesignation('Ayurvedic Physician (Vaidya)');
         setDepartment('Kayachikitsa & Panchakarma');
-        setQualification('BAMS, MD (Ayurveda)');
         break;
       case 'DOCTOR':
         setDesignation('Consultant Physician & Emergency Lead');
         setDepartment('Emergency & Acute Care');
-        setQualification('MBBS, MD');
         break;
       case 'RECEPTIONIST':
         setDesignation('Admissions & Front Desk Coordinator');
         setDepartment('Patient Admissions & Front Desk');
-        setQualification('BBA / Healthcare Administration');
         break;
       case 'PHARMACIST':
         setDesignation('Chief Ayurvedic Pharmacist');
         setDepartment('Ayurvedic & Allopathic Pharmacy');
-        setQualification('B.Pharm / D.Pharm (Ayurveda)');
         break;
       case 'ACCOUNTANT':
         setDesignation('Patient Accounts & Cashier Officer');
         setDepartment('Patient Financial Services');
-        setQualification('CPA, B.Com Healthcare Billing');
         break;
       case 'ADMIN':
         setDesignation('Hospital Operations Coordinator');
         setDepartment('Hospital Operations Administration');
-        setQualification('MHA / MBA Hospital Management');
         break;
       case 'SUPER_ADMIN':
         setDesignation('Executive Governance & IT Director');
@@ -105,13 +99,13 @@ export const NewStaffModal: React.FC<NewStaffModalProps> = ({
       role,
       designation: designation.trim() || `${role} Staff`,
       department: department.trim() || 'General Clinical Services',
-      licenseNumber: licenseNumber.trim() || `REG-AY-${Math.floor(1000 + Math.random() * 9000)}`,
+      licenseNumber: licenseNumber.trim() || undefined,
       email: cleanEmail,
       phone: cleanPhone,
       shift,
-      qualification: qualification.trim() || 'Qualified Professional',
+      qualification: qualification.trim() || undefined,
       status,
-      notes: notes.trim(),
+      notes: notes.trim() || undefined,
       joiningDate: new Date().toISOString().split('T')[0]
     };
 

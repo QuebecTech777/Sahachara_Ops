@@ -35,7 +35,7 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [shift, setShift] = useState<'Morning (07:00-15:00)' | 'Evening (15:00-23:00)' | 'Night (23:00-07:00)' | 'General (09:00-17:00)'>('Morning (07:00-15:00)');
-  const [qualification, setQualification] = useState('BAMS, MD (Ayurveda)');
+  const [qualification, setQualification] = useState('');
   const [status, setStatus] = useState<'on_duty' | 'active' | 'on_leave'>('on_duty');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -136,14 +136,14 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
       role,
       designation: designation.trim() || `${role} Staff`,
       department: department.trim() || 'General Clinical Services',
-      licenseNumber: licenseNumber.trim() || `REG-AY-${Math.floor(1000 + Math.random() * 9000)}`,
+      licenseNumber: licenseNumber.trim() || undefined,
       email: cleanEmail,
       phone: cleanPhone,
       shift,
-      qualification: qualification.trim() || 'Qualified Professional',
+      qualification: qualification.trim() || undefined,
       status: 'pending_activation',
       activationPin: generatedPin,
-      notes: notes.trim(),
+      notes: notes.trim() || undefined,
       joiningDate: new Date().toISOString().split('T')[0]
     };
 

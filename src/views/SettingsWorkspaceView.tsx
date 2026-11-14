@@ -42,7 +42,8 @@ import {
   HospitalProfile,
   Department,
   DepartmentDiscipline,
-  StaffDepartmentAssignment
+  StaffDepartmentAssignment,
+  PractitionerCredentials
 } from '../types/hospital';
 import { hospitalApi } from '../services/hospitalApi';
 import { ServiceRateManagementSection } from './ServiceRateManagementSection';
@@ -154,13 +155,88 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
   const [receiptPrefix, setReceiptPrefix] = useState('SAH-REC-');
 
   // ----------------------------------------------------
-  // 3. My Profile State
+  // 3. My Profile State & AYUSH Clinical Credentials
   // ----------------------------------------------------
+  const isClinicalPractitioner = currentUser.role === 'DOCTOR' || currentUser.role === 'VAIDYA';
+  const myLinkedStaff = staff.find(
+    (s) => s.userId === currentUser.id || s.email.toLowerCase() === currentUser.email.toLowerCase()
+  );
+
   const [profileName, setProfileName] = useState(currentUser.name);
-  const [myProfilePhone, setMyProfilePhone] = useState('+91 98450 11200');
-  const [profileDept, setProfileDept] = useState('Kayachikitsa (Internal Medicine & Panchakarma)');
-  const [profileRoom, setProfileRoom] = useState('OPD Consultation Suite 104, West Block');
-  const [profileLicense, setProfileLicense] = useState('AYUSH-KL-4091');
+  const [myProfilePhone, setMyProfilePhone] = useState(myLinkedStaff?.phone || '');
+  const [profileDept, setProfileDept] = useState(myLinkedStaff?.department || currentUser.department || '');
+  const [profileRoom, setProfileRoom] = useState('');
+
+  // Clinical Credentials State
+  const [practitionerCredentials, setPractitionerCredentials] = useState<PractitionerCredentials | null>(null);
+  const [loadingCredentials, setLoadingCredentials] = useState(false);
+  const [isEditingCredentials, setIsEditingCredentials] = useState(false);
+  const [savingCredentials, setSavingCredentials] = useState(false);
+
+  // Editable Credential Fields
+  const [credQualification, setCredQualification] = useState('');
+  const [credDiscipline, setCredDiscipline] = useState('');
+  const [credUniversity, setCredUniversity] = useState('');
+  const [credCouncil, setCredCouncil] = useState('');
+  const [credRegNumber, setCredRegNumber] = useState('');
+  const [credRegDate, setCredRegDate] = useState('');
+  const [credExpiryDate, setCredExpiryDate] = useState('');
+  const [credCertificate, setCredCertificate] = useState('');
+
+  useEffect(() => {
+    if (isClinicalPractitioner) {
+      setLoadingCredentials(true);
+      hospitalApi.getPractitionerCredentials()
+        .then((creds) => {
+          setPractitionerCredentials(creds);
+          if (creds) {
+            setCredQualification(creds.qualification || '');
+            setCredDiscipline(creds.discipline || (currentUser.role === 'VAIDYA' ? 'Ayurveda' : 'Modern Medicine'));
+            setCredUniversity(creds.university || '');
+            setCredCouncil(creds.registrationCouncil || '');
+            setCredRegNumber(creds.registrationNumber || '');
+            setCredRegDate(creds.registrationDate || '');
+            setCredExpiryDate(creds.registrationExpiryDate || '');
+            setCredCertificate(creds.supportingCertificate || '');
+          } else {
+            setCredDiscipline(currentUser.role === 'VAIDYA' ? 'Ayurveda' : 'Modern Medicine');
+          }
+        })
+        .catch((err) => {
+          console.warn('[Credentials] Failed to load credentials:', err);
+        })
+        .finally(() => {
+          setLoadingCredentials(false);
+        });
+    }
+  }, [currentUser.id, currentUser.role, isClinicalPractitioner]);
+
+  const handleSaveCredentials = async () => {
+    setSavingCredentials(true);
+    try {
+      const res = await hospitalApi.updatePractitionerCredentials({
+        qualification: credQualification.trim() || null,
+        discipline: credDiscipline.trim() || null,
+        university: credUniversity.trim() || null,
+        registrationCouncil: credCouncil.trim() || null,
+        registrationNumber: credRegNumber.trim() || null,
+        registrationDate: credRegDate.trim() || null,
+        registrationExpiryDate: credExpiryDate.trim() || null,
+        supportingCertificate: credCertificate.trim() || null
+      });
+      setPractitionerCredentials(res);
+      setIsEditingCredentials(false);
+      if (onNotify) {
+        onNotify('Credentials Updated', 'Your clinical credentials & licensing dossier have been saved successfully.', 'success');
+      }
+    } catch (err: any) {
+      if (onNotify) {
+        onNotify('Error Saving Credentials', err.message || 'Failed to update clinical credentials.', 'error');
+      }
+    } finally {
+      setSavingCredentials(false);
+    }
+  };
 
   // ----------------------------------------------------
   // 4. Staff Management State
@@ -1464,10 +1540,12 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
                       <CarbonTag type="green" size="sm">Active & Certified</CarbonTag>
                     </div>
                     <p className="text-xs text-[#525252] mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span>{profileDept}</span>
-                      <span className="text-[#8d8d8d]">•</span>
-                      <span className="font-mono text-[#0f62fe]">Reg: {profileLicense}</span>
-                      <span className="text-[#8d8d8d]">•</span>
+                      {profileDept && <span>{profileDept}</span>}
+                      {profileDept && (isClinicalPractitioner && practitionerCredentials?.registrationNumber) && <span className="text-[#8d8d8d]">•</span>}
+                      {isClinicalPractitioner && practitionerCredentials?.registrationNumber && (
+                        <span className="font-mono text-[#0f62fe]">Reg: {practitionerCredentials.registrationNumber}</span>
+                      )}
+                      {(profileDept || (isClinicalPractitioner && practitionerCredentials?.registrationNumber)) && <span className="text-[#8d8d8d]">•</span>}
                       <span>Sahachara Ayurveda Main Complex</span>
                     </p>
                   </div>
@@ -1576,69 +1654,245 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
                     </div>
                   </div>
 
-                  {/* AYUSH Accreditation & Qualifications */}
-                  <div className="p-5 bg-white border border-[#e0e0e0] space-y-4">
-                    <div className="flex items-center justify-between border-b border-[#e0e0e0] pb-3">
-                      <div>
-                        <h4 className="text-sm font-semibold text-[#161616] flex items-center gap-2">
-                          <Award className="w-4 h-4 text-[#0f62fe]" />
-                          AYUSH Clinical Credentials & Licensing
-                        </h4>
-                        <p className="text-xs text-[#525252] mt-0.5">National AYUSH Board and State Medical Council verification dossier.</p>
+                  {/* AYUSH Accreditation & Qualifications - Restricted Exclusively to DOCTOR and VAIDYA */}
+                  {isClinicalPractitioner && (
+                    <div className="p-5 bg-white border border-[#e0e0e0] space-y-4">
+                      <div className="flex items-center justify-between border-b border-[#e0e0e0] pb-3">
+                        <div>
+                          <h4 className="text-sm font-semibold text-[#161616] flex items-center gap-2">
+                            <Award className="w-4 h-4 text-[#0f62fe]" />
+                            AYUSH Clinical Credentials & Licensing
+                          </h4>
+                          <p className="text-xs text-[#525252] mt-0.5">National AYUSH Board and State Medical Council verification dossier.</p>
+                        </div>
+                        {!isEditingCredentials && practitionerCredentials && (
+                          <CarbonButton
+                            kind="tertiary"
+                            size="sm"
+                            renderIcon={Edit}
+                            onClick={() => setIsEditingCredentials(true)}
+                          >
+                            Edit Credentials
+                          </CarbonButton>
+                        )}
                       </div>
+
+                      {loadingCredentials ? (
+                        <div className="p-6 text-center text-xs text-[#525252] flex items-center justify-center gap-2">
+                          <RefreshCw className="w-4 h-4 animate-spin text-[#0f62fe]" />
+                          <span>Loading clinical credentials...</span>
+                        </div>
+                      ) : isEditingCredentials ? (
+                        <div className="space-y-4 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                                Academic Qualification
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. BAMS, MD (Ayurveda) or MBBS, MD"
+                                value={credQualification}
+                                onChange={(e) => setCredQualification(e.target.value)}
+                                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                                AYUSH System / Discipline
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Ayurveda, Kayachikitsa, Modern Medicine"
+                                value={credDiscipline}
+                                onChange={(e) => setCredDiscipline(e.target.value)}
+                                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                                University / Institution
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Kerala University of Health Sciences"
+                                value={credUniversity}
+                                onChange={(e) => setCredUniversity(e.target.value)}
+                                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                                Registering Council Authority
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Travancore-Cochin Medical Council"
+                                value={credCouncil}
+                                onChange={(e) => setCredCouncil(e.target.value)}
+                                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                                Registration / License Number
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. AYUSH-KL-88201"
+                                value={credRegNumber}
+                                onChange={(e) => setCredRegNumber(e.target.value)}
+                                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs font-mono"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                                Registration Date
+                              </label>
+                              <input
+                                type="date"
+                                value={credRegDate}
+                                onChange={(e) => setCredRegDate(e.target.value)}
+                                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                                Registration Expiry Date (Where Applicable)
+                              </label>
+                              <input
+                                type="date"
+                                value={credExpiryDate}
+                                onChange={(e) => setCredExpiryDate(e.target.value)}
+                                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                                Supporting Certificate / Document Reference
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. TCMC_REG_CERT_2026.pdf or verification ID"
+                                value={credCertificate}
+                                onChange={(e) => setCredCertificate(e.target.value)}
+                                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-2 border-t border-[#e0e0e0]">
+                            <CarbonButton
+                              kind="primary"
+                              size="sm"
+                              renderIcon={Save}
+                              onClick={handleSaveCredentials}
+                              disabled={savingCredentials}
+                            >
+                              {savingCredentials ? 'Saving Credentials...' : 'Save Clinical Credentials'}
+                            </CarbonButton>
+                            <CarbonButton
+                              kind="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setIsEditingCredentials(false);
+                                if (practitionerCredentials) {
+                                  setCredQualification(practitionerCredentials.qualification || '');
+                                  setCredDiscipline(practitionerCredentials.discipline || '');
+                                  setCredUniversity(practitionerCredentials.university || '');
+                                  setCredCouncil(practitionerCredentials.registrationCouncil || '');
+                                  setCredRegNumber(practitionerCredentials.registrationNumber || '');
+                                  setCredRegDate(practitionerCredentials.registrationDate || '');
+                                  setCredExpiryDate(practitionerCredentials.registrationExpiryDate || '');
+                                  setCredCertificate(practitionerCredentials.supportingCertificate || '');
+                                }
+                              }}
+                              disabled={savingCredentials}
+                            >
+                              Cancel
+                            </CarbonButton>
+                          </div>
+                        </div>
+                      ) : !practitionerCredentials ? (
+                        <div className="p-6 bg-[#f4f4f4] border border-[#e0e0e0] text-center space-y-3">
+                          <div className="w-10 h-10 mx-auto bg-[#e0e0e0] flex items-center justify-center text-[#525252]">
+                            <Award className="w-5 h-5 text-[#525252]" />
+                          </div>
+                          <div>
+                            <h5 className="text-sm font-semibold text-[#161616]">No Clinical Credentials Recorded</h5>
+                            <p className="text-xs text-[#525252] max-w-md mx-auto mt-1">
+                              Your clinical profile does not currently have AYUSH or Medical Council credentials on file. Add your degree qualifications, council authority, and license details to complete your practitioner dossier.
+                            </p>
+                          </div>
+                          <CarbonButton
+                            kind="primary"
+                            size="sm"
+                            renderIcon={Plus}
+                            onClick={() => setIsEditingCredentials(true)}
+                          >
+                            Add Clinical Credentials
+                          </CarbonButton>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                            <div className="p-3 bg-[#f4f4f4] border border-[#e0e0e0] space-y-1">
+                              <span className="text-[10px] font-mono uppercase text-[#525252] block">Medical Registration Number</span>
+                              <div className="font-semibold text-[#161616] text-xs font-mono">
+                                {practitionerCredentials.registrationNumber || 'Pending Registration'}
+                              </div>
+                              {practitionerCredentials.registrationNumber && (
+                                <span className="text-[10px] text-[#24a148] flex items-center gap-1 mt-1">
+                                  <CheckCircle2 className="w-3 h-3 text-[#24a148]" /> Registered Dossier Active
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="p-3 bg-[#f4f4f4] border border-[#e0e0e0] space-y-1">
+                              <span className="text-[10px] font-mono uppercase text-[#525252] block">Registering Council Authority</span>
+                              <div className="font-semibold text-[#161616] text-xs">
+                                {practitionerCredentials.registrationCouncil || 'Not Specified'}
+                              </div>
+                              <div className="text-[11px] text-[#525252]">
+                                {practitionerCredentials.discipline || (currentUser.role === 'VAIDYA' ? 'Ayurvedic Medicine' : 'Modern Medicine')}
+                              </div>
+                            </div>
+
+                            <div className="p-3 bg-[#f4f4f4] border border-[#e0e0e0] space-y-1">
+                              <span className="text-[10px] font-mono uppercase text-[#525252] block">Academic Degrees & Qualifications</span>
+                              <div className="font-semibold text-[#161616] text-xs">
+                                {practitionerCredentials.qualification || 'Not Specified'}
+                              </div>
+                              <div className="text-[11px] text-[#525252]">
+                                {practitionerCredentials.university || 'University not recorded'}
+                              </div>
+                            </div>
+
+                            <div className="p-3 bg-[#f4f4f4] border border-[#e0e0e0] space-y-1">
+                              <span className="text-[10px] font-mono uppercase text-[#525252] block">License Validity & Verification</span>
+                              <div className={`font-semibold text-xs ${practitionerCredentials.registrationExpiryDate ? 'text-[#24a148]' : 'text-[#161616]'}`}>
+                                {practitionerCredentials.registrationExpiryDate
+                                  ? `Valid through ${practitionerCredentials.registrationExpiryDate}`
+                                  : 'Permanent / No Expiry Date Recorded'}
+                              </div>
+                              <div className="text-[11px] text-[#525252]">
+                                {practitionerCredentials.supportingCertificate
+                                  ? `Certificate: ${practitionerCredentials.supportingCertificate}`
+                                  : 'No certificate file attached'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                      <div className="p-3 bg-[#f4f4f4] border border-[#e0e0e0] space-y-1">
-                        <span className="text-[10px] font-mono uppercase text-[#525252] block">AYUSH Medical Registration Number</span>
-                        <input
-                          type="text"
-                          value={profileLicense}
-                          onChange={(e) => setProfileLicense(e.target.value)}
-                          className="w-full h-9 px-2 bg-white border border-[#8d8d8d] text-xs font-mono focus:border-[#0f62fe] outline-none font-semibold text-[#161616]"
-                        />
-                        <span className="text-[10px] text-[#24a148] flex items-center gap-1 mt-1">
-                          <CheckCircle2 className="w-3 h-3 text-[#24a148]" /> Verified on National AYUSH Registry
-                        </span>
-                      </div>
-
-                      <div className="p-3 bg-[#f4f4f4] border border-[#e0e0e0] space-y-1">
-                        <span className="text-[10px] font-mono uppercase text-[#525252] block">Registering Council Authority</span>
-                        <div className="font-semibold text-[#161616] text-xs">Travancore-Cochin Medical Council</div>
-                        <div className="text-[11px] text-[#525252]">Indian Systems of Medicine, Govt of Kerala</div>
-                      </div>
-
-                      <div className="p-3 bg-[#f4f4f4] border border-[#e0e0e0] space-y-1">
-                        <span className="text-[10px] font-mono uppercase text-[#525252] block">Academic Degrees & Qualifications</span>
-                        <div className="font-semibold text-[#161616] text-xs">BAMS, MD (Ayurveda - Kayachikitsa)</div>
-                        <div className="text-[11px] text-[#525252]">Govt. Ayurveda College, University of Kerala</div>
-                      </div>
-
-                      <div className="p-3 bg-[#f4f4f4] border border-[#e0e0e0] space-y-1">
-                        <span className="text-[10px] font-mono uppercase text-[#525252] block">Clinical License Validity</span>
-                        <div className="font-semibold text-[#24a148] text-xs">Valid through 31 Dec 2030</div>
-                        <div className="text-[11px] text-[#525252]">Annual Continuous Medical Education (CME) Compliant</div>
-                      </div>
-                    </div>
-
-                    <div className="pt-2">
-                      <span className="text-[11px] font-mono uppercase text-[#525252] block mb-2">Verified Clinical Sub-Specializations:</span>
-                      <div className="flex flex-wrap gap-2">
-                        <span className="px-2.5 py-1 bg-[#edf5ff] border border-[#a6c8ff] text-xs text-[#0043ce] font-medium">
-                          Panchakarma Detoxification & Samsarjana Krama
-                        </span>
-                        <span className="px-2.5 py-1 bg-[#edf5ff] border border-[#a6c8ff] text-xs text-[#0043ce] font-medium">
-                          Vata-Vyadhi & Musculoskeletal Care
-                        </span>
-                        <span className="px-2.5 py-1 bg-[#edf5ff] border border-[#a6c8ff] text-xs text-[#0043ce] font-medium">
-                          Ayurvedic Clinical Pharmacology (Dravyaguna)
-                        </span>
-                        <span className="px-2.5 py-1 bg-[#edf5ff] border border-[#a6c8ff] text-xs text-[#0043ce] font-medium">
-                          Agni & Metabolic Restoration
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Sidebar Column (1 col) */}

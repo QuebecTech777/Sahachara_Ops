@@ -389,7 +389,7 @@ export async function ensureDefaultDatabaseUsers() {
     });
     await prisma.staffMember.upsert({
       where: { email: 'robert.rivera@sahachara.com' },
-      update: { role: 'DOCTOR', status: 'active', userId: uDoc.id, isSuspended: false, archivedAt: null },
+      update: { role: 'DOCTOR', status: 'active', userId: uDoc.id, isSuspended: false, archivedAt: null, licenseNumber: 'MD-NY-77142' },
       create: {
         id: 'stf-doc-01',
         employeeId: 'STF-2026-00002',
@@ -399,6 +399,7 @@ export async function ensureDefaultDatabaseUsers() {
         department: 'Emergency & Acute Care',
         email: 'robert.rivera@sahachara.com',
         phone: '+91 98450 22222',
+        licenseNumber: 'MD-NY-77142',
         status: 'active',
         userId: uDoc.id
       }
@@ -421,7 +422,7 @@ export async function ensureDefaultDatabaseUsers() {
     });
     await prisma.staffMember.upsert({
       where: { email: 'sarah.chen@sahachara.com' },
-      update: { role: 'VAIDYA', status: 'active', userId: uVaidya.id, isSuspended: false, archivedAt: null },
+      update: { role: 'VAIDYA', status: 'active', userId: uVaidya.id, isSuspended: false, archivedAt: null, licenseNumber: 'AYUSH-KL-88201' },
       create: {
         id: 'stf-vaidya-01',
         employeeId: 'STF-2026-00003',
@@ -431,6 +432,7 @@ export async function ensureDefaultDatabaseUsers() {
         department: 'Kayachikitsa & Panchakarma',
         email: 'sarah.chen@sahachara.com',
         phone: '+91 98450 33333',
+        licenseNumber: 'AYUSH-KL-88201',
         status: 'active',
         userId: uVaidya.id
       }
@@ -6402,7 +6404,7 @@ export async function dbGetPractitioners(): Promise<any[]> {
     const users = await prisma.user.findMany({
       where: {
         role: { in: ['DOCTOR', 'VAIDYA'] },
-        isActive: true
+        status: 'active'
       },
       orderBy: { name: 'asc' }
     });
@@ -6413,10 +6415,10 @@ export async function dbGetPractitioners(): Promise<any[]> {
         title: u.role === 'VAIDYA' ? 'Ayurvedic Physician (Vaidya)' : 'Medical Consultant',
         specialty: u.role === 'VAIDYA' ? 'Ayurvedic Medicine' : 'Internal Medicine',
         department: u.department || (u.role === 'VAIDYA' ? 'Ayurvedic Medicine' : 'General Medicine'),
-        licenseNumber: `LIC-${u.role}-${u.id.slice(0, 6).toUpperCase()}`,
+        licenseNumber: u.licenseNumber || null,
         status: 'on_duty',
-        room: u.role === 'VAIDYA' ? 'Ayurvedic Suite 101' : 'Consultation Room 202',
-        phone: '+91 471 2345678',
+        room: u.role === 'VAIDYA' ? 'Ayurvedic Suite' : 'Consultation Room',
+        phone: u.phone || null,
         email: u.email,
         availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
         timeSlots: [
@@ -6532,6 +6534,32 @@ export async function generateUniqueStaffId(): Promise<string> {
   }
 }
 
+export function extractCleanStaffNotes(rawNotes: string | null | undefined): string | null {
+  if (!rawNotes) return null;
+  if (rawNotes.startsWith('{') && rawNotes.includes('"AYUSH_CLINICAL_CREDENTIALS"')) {
+    try {
+      const parsed = JSON.parse(rawNotes);
+      return parsed.notes || null;
+    } catch {
+      return rawNotes;
+    }
+  }
+  return rawNotes;
+}
+
+export function mergeStaffNotesWithCredentials(existingRawNotes: string | null | undefined, newNotes: string | null | undefined): string | null {
+  if (existingRawNotes && existingRawNotes.startsWith('{') && existingRawNotes.includes('"AYUSH_CLINICAL_CREDENTIALS"')) {
+    try {
+      const parsed = JSON.parse(existingRawNotes);
+      parsed.notes = newNotes?.trim() || null;
+      return JSON.stringify(parsed);
+    } catch {
+      return newNotes?.trim() || null;
+    }
+  }
+  return newNotes?.trim() || null;
+}
+
 export function mapPrismaStaffToDomain(s: any): StaffMember {
   return {
     id: s.id,
@@ -6573,7 +6601,7 @@ export function mapPrismaStaffToDomain(s: any): StaffMember {
     createdByName: s.createdByName ?? null,
     createdAt: s.createdAt ? s.createdAt.toISOString() : undefined,
     updatedAt: s.updatedAt ? s.updatedAt.toISOString() : undefined,
-    notes: s.notes ?? null
+    notes: extractCleanStaffNotes(s.notes)
   };
 }
 
@@ -6970,7 +6998,21 @@ export async function dbUpdateStaffMember(
   if (updates.emergencyContactPhone !== undefined) safeData.emergencyContactPhone = updates.emergencyContactPhone?.trim() || null;
   if (updates.employmentType !== undefined) safeData.employmentType = updates.employmentType?.trim() || null;
   if (updates.reportingTo !== undefined) safeData.reportingTo = updates.reportingTo?.trim() || null;
-  if (updates.notes !== undefined) safeData.notes = updates.notes?.trim() || null;
+  if (updates.notes !== undefined) {
+    let existingRawNotes = staff.notes;
+    if (isPrismaConnected) {
+      try {
+        const rawRec = await prisma.staffMember.findUnique({
+          where: { id: staff.id },
+          select: { notes: true }
+        });
+        if (rawRec?.notes) {
+          existingRawNotes = rawRec.notes;
+        }
+      } catch {}
+    }
+    safeData.notes = mergeStaffNotesWithCredentials(existingRawNotes, updates.notes);
+  }
 
   if (isPrismaConnected) {
     const updated = await prisma.$transaction(async (tx) => {
@@ -7492,6 +7534,261 @@ export async function dbUpdateStaff(id: string, updates: Partial<StaffMember>): 
   if (idx === -1) return null;
   hospitalStore.staff[idx] = { ...hospitalStore.staff[idx], ...updates };
   return hospitalStore.staff[idx];
+}
+
+// ------------------------------------------------------------------------------
+// AYUSH CLINICAL CREDENTIALS & LICENSING (PRACTITIONER SELF-SERVICE)
+// ------------------------------------------------------------------------------
+
+export interface PractitionerCredentials {
+  qualification: string | null;
+  discipline: string | null;
+  university: string | null;
+  registrationCouncil: string | null;
+  registrationNumber: string | null;
+  registrationDate: string | null;
+  registrationExpiryDate: string | null;
+  supportingCertificate: string | null;
+  updatedAt?: string | null;
+}
+
+export function parsePractitionerCredentials(staff: any, user?: any): PractitionerCredentials | null {
+  let credMeta: any = {};
+  const rawNotes = staff?.notes;
+  if (rawNotes && typeof rawNotes === 'string' && rawNotes.startsWith('{') && rawNotes.includes('"AYUSH_CLINICAL_CREDENTIALS"')) {
+    try {
+      const parsed = JSON.parse(rawNotes);
+      credMeta = parsed.credentials || {};
+    } catch {}
+  }
+
+  const qualification = staff?.qualification?.trim() || null;
+  const discipline = staff?.discipline?.trim() || null;
+  const registrationNumber = staff?.licenseNumber?.trim() || user?.licenseNumber?.trim() || null;
+  const university = credMeta.university?.trim() || null;
+  const registrationCouncil = credMeta.registrationCouncil?.trim() || null;
+  const registrationDate = credMeta.registrationDate?.trim() || null;
+  const registrationExpiryDate = credMeta.registrationExpiryDate?.trim() || null;
+  const supportingCertificate = credMeta.supportingCertificate?.trim() || null;
+  const updatedAt = credMeta.updatedAt || staff?.updatedAt?.toISOString?.() || (typeof staff?.updatedAt === 'string' ? staff.updatedAt : null);
+
+  const hasAnyField = Boolean(
+    qualification ||
+    discipline ||
+    registrationNumber ||
+    university ||
+    registrationCouncil ||
+    registrationDate ||
+    registrationExpiryDate ||
+    supportingCertificate
+  );
+
+  if (!hasAnyField) {
+    return null;
+  }
+
+  return {
+    qualification,
+    discipline,
+    university,
+    registrationCouncil,
+    registrationNumber,
+    registrationDate,
+    registrationExpiryDate,
+    supportingCertificate,
+    updatedAt
+  };
+}
+
+export async function dbGetPractitionerCredentials(
+  userId: string,
+  userRole: string,
+  userEmail: string
+): Promise<PractitionerCredentials | null> {
+  if (userRole !== 'DOCTOR' && userRole !== 'VAIDYA') {
+    throw new Error(`ForbiddenRole: Access denied: AYUSH Clinical Credentials & Licensing is restricted exclusively to DOCTOR and VAIDYA practitioners. Role "${userRole}" is not authorized.`);
+  }
+
+  let dbStaff: any = null;
+  let dbUser: any = null;
+
+  if (isPrismaConnected) {
+    try {
+      dbUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            ...(userId ? [{ id: userId }] : []),
+            ...(userEmail ? [{ email: userEmail.toLowerCase().trim() }] : [])
+          ]
+        }
+      });
+
+      dbStaff = await prisma.staffMember.findFirst({
+        where: {
+          OR: [
+            ...(userId ? [{ userId }] : []),
+            ...(userEmail ? [{ email: userEmail.toLowerCase().trim() }] : [])
+          ]
+        }
+      });
+    } catch (err) {
+      console.warn('[Prisma dbGetPractitionerCredentials] Lookup warning:', err);
+    }
+  }
+
+  if (!dbStaff && !dbUser) {
+    const memStaff = hospitalStore.staff.find(
+      (s) => s.userId === userId || (userEmail && s.email.toLowerCase() === userEmail.toLowerCase())
+    );
+    return parsePractitionerCredentials(memStaff);
+  }
+
+  return parsePractitionerCredentials(dbStaff, dbUser);
+}
+
+export async function dbUpdatePractitionerCredentials(
+  userId: string,
+  userRole: string,
+  userEmail: string,
+  data: Partial<PractitionerCredentials>
+): Promise<PractitionerCredentials> {
+  if (userRole !== 'DOCTOR' && userRole !== 'VAIDYA') {
+    throw new Error(`ForbiddenRole: Access denied: AYUSH Clinical Credentials & Licensing is restricted exclusively to DOCTOR and VAIDYA practitioners. Role "${userRole}" is not authorized.`);
+  }
+
+  const cleanQual = data.qualification !== undefined ? (data.qualification?.trim() || null) : undefined;
+  const cleanDiscipline = data.discipline !== undefined ? (data.discipline?.trim() || null) : undefined;
+  const cleanRegNo = data.registrationNumber !== undefined ? (data.registrationNumber?.trim() || null) : undefined;
+  const cleanUniv = data.university !== undefined ? (data.university?.trim() || null) : undefined;
+  const cleanCouncil = data.registrationCouncil !== undefined ? (data.registrationCouncil?.trim() || null) : undefined;
+  const cleanRegDate = data.registrationDate !== undefined ? (data.registrationDate?.trim() || null) : undefined;
+  const cleanExpiry = data.registrationExpiryDate !== undefined ? (data.registrationExpiryDate?.trim() || null) : undefined;
+  const cleanCert = data.supportingCertificate !== undefined ? (data.supportingCertificate?.trim() || null) : undefined;
+
+  let staffRecord: any = null;
+  let userRecord: any = null;
+
+  if (isPrismaConnected) {
+    userRecord = await prisma.user.findFirst({
+      where: {
+        OR: [
+          ...(userId ? [{ id: userId }] : []),
+          ...(userEmail ? [{ email: userEmail.toLowerCase().trim() }] : [])
+        ]
+      }
+    });
+
+    staffRecord = await prisma.staffMember.findFirst({
+      where: {
+        OR: [
+          ...(userId ? [{ userId }] : []),
+          ...(userEmail ? [{ email: userEmail.toLowerCase().trim() }] : [])
+        ]
+      }
+    });
+
+    if (!staffRecord && userRecord) {
+      const seqEmployeeId = await generateUniqueStaffId();
+      staffRecord = await prisma.staffMember.create({
+        data: {
+          employeeId: seqEmployeeId,
+          name: userRecord.name,
+          role: userRole,
+          designation: userRole === 'VAIDYA' ? 'Ayurvedic Physician (Vaidya)' : 'Clinical Physician',
+          department: userRecord.department || (userRole === 'VAIDYA' ? 'Kayachikitsa & Panchakarma' : 'General Medicine'),
+          email: userRecord.email,
+          phone: '+91 98450 00000',
+          userId: userRecord.id,
+          status: 'active'
+        }
+      });
+    }
+
+    if (staffRecord) {
+      let existingHumanNotes: string | null = null;
+      let existingCreds: any = {};
+      if (staffRecord.notes && staffRecord.notes.startsWith('{') && staffRecord.notes.includes('"AYUSH_CLINICAL_CREDENTIALS"')) {
+        try {
+          const parsed = JSON.parse(staffRecord.notes);
+          existingHumanNotes = parsed.notes || null;
+          existingCreds = parsed.credentials || {};
+        } catch {
+          existingHumanNotes = staffRecord.notes;
+        }
+      } else {
+        existingHumanNotes = staffRecord.notes || null;
+      }
+
+      const mergedCredentials = {
+        university: cleanUniv !== undefined ? cleanUniv : (existingCreds.university || null),
+        registrationCouncil: cleanCouncil !== undefined ? cleanCouncil : (existingCreds.registrationCouncil || null),
+        registrationDate: cleanRegDate !== undefined ? cleanRegDate : (existingCreds.registrationDate || null),
+        registrationExpiryDate: cleanExpiry !== undefined ? cleanExpiry : (existingCreds.registrationExpiryDate || null),
+        supportingCertificate: cleanCert !== undefined ? cleanCert : (existingCreds.supportingCertificate || null),
+        updatedAt: new Date().toISOString()
+      };
+
+      const envelopeJson = JSON.stringify({
+        type: 'AYUSH_CLINICAL_CREDENTIALS',
+        credentials: mergedCredentials,
+        notes: existingHumanNotes
+      });
+
+      const updateData: any = {
+        notes: envelopeJson
+      };
+      if (cleanQual !== undefined) updateData.qualification = cleanQual;
+      if (cleanDiscipline !== undefined) updateData.discipline = cleanDiscipline;
+      if (cleanRegNo !== undefined) updateData.licenseNumber = cleanRegNo;
+
+      staffRecord = await prisma.staffMember.update({
+        where: { id: staffRecord.id },
+        data: updateData
+      });
+
+      if (userRecord && cleanRegNo !== undefined) {
+        await prisma.user.update({
+          where: { id: userRecord.id },
+          data: { licenseNumber: cleanRegNo }
+        });
+      }
+    }
+  }
+
+  const memIdx = hospitalStore.staff.findIndex(
+    (s) => s.userId === userId || (userEmail && s.email.toLowerCase() === userEmail.toLowerCase())
+  );
+  if (memIdx !== -1) {
+    if (cleanQual !== undefined) hospitalStore.staff[memIdx].qualification = cleanQual;
+    if (cleanDiscipline !== undefined) hospitalStore.staff[memIdx].discipline = cleanDiscipline;
+    if (cleanRegNo !== undefined) hospitalStore.staff[memIdx].licenseNumber = cleanRegNo;
+  }
+
+  const result = parsePractitionerCredentials(staffRecord, userRecord) || {
+    qualification: cleanQual || null,
+    discipline: cleanDiscipline || null,
+    university: cleanUniv || null,
+    registrationCouncil: cleanCouncil || null,
+    registrationNumber: cleanRegNo || null,
+    registrationDate: cleanRegDate || null,
+    registrationExpiryDate: cleanExpiry || null,
+    supportingCertificate: cleanCert || null,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    await dbLogAudit(
+      staffRecord?.name || userRecord?.name || userEmail,
+      userRole,
+      'UPDATE_CLINICAL_CREDENTIALS',
+      'Clinical Documentation',
+      `Practitioner updated AYUSH clinical credentials & licensing dossier (Reg: ${result.registrationNumber || 'None'}).`
+    );
+  } catch (auditErr) {
+    console.warn('[AuditLog] Non-fatal audit log failure on credentials update:', auditErr);
+  }
+
+  return result;
 }
 
 // ------------------------------------------------------------------------------

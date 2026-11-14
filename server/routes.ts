@@ -148,6 +148,8 @@ import {
   dbSuspendStaff,
   dbReactivateStaff,
   dbArchiveStaff,
+  dbGetPractitionerCredentials,
+  dbUpdatePractitionerCredentials,
   dbRegenerateActivationPin,
   dbGetStaffAuditHistory,
   dbGetTariffs,
@@ -1847,6 +1849,103 @@ apiRouter.get('/practitioners', requireRole(VALID_USER_ROLES as unknown as UserR
     return res.json({ success: true, data: list });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// 5.5 AYUSH CLINICAL CREDENTIALS & LICENSING (Practitioner Self-Service)
+// ==========================================
+
+// 1. Read Practitioner Credentials (DOCTOR & VAIDYA ONLY)
+apiRouter.get('/practitioner/credentials', requireRole(['DOCTOR', 'VAIDYA'] as UserRole[]), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const creds = await dbGetPractitionerCredentials(req.userId!, req.userRole!, req.userName || '');
+    return res.json({ success: true, data: creds });
+  } catch (err: any) {
+    if (err.message.includes('ForbiddenRole')) {
+      return res.status(403).json({ success: false, error: 'Forbidden', message: err.message });
+    }
+    return res.status(500).json({ success: false, error: 'CredentialRetrievalError', message: err.message });
+  }
+});
+
+// 2. Read Practitioner Credentials by ID with IDOR protection
+apiRouter.get('/practitioner/credentials/:id', requireRole(['DOCTOR', 'VAIDYA'] as UserRole[]), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const targetId = req.params.id;
+    const isSelf = targetId === req.userId || targetId === 'me';
+    if (!isSelf) {
+      const staff = await prisma.staffMember.findFirst({
+        where: { OR: [{ id: targetId }, { employeeId: targetId }] }
+      });
+      if (!staff || (staff.userId !== req.userId && staff.email.toLowerCase() !== req.userName?.toLowerCase())) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Access denied: Practitioners may only view their own clinical credentials.'
+        });
+      }
+    }
+    const creds = await dbGetPractitionerCredentials(req.userId!, req.userRole!, req.userName || '');
+    return res.json({ success: true, data: creds });
+  } catch (err: any) {
+    if (err.message.includes('ForbiddenRole')) {
+      return res.status(403).json({ success: false, error: 'Forbidden', message: err.message });
+    }
+    return res.status(500).json({ success: false, error: 'CredentialRetrievalError', message: err.message });
+  }
+});
+
+// 3. Update Practitioner Credentials (PUT)
+apiRouter.put('/practitioner/credentials', requireRole(['DOCTOR', 'VAIDYA'] as UserRole[]), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const updated = await dbUpdatePractitionerCredentials(req.userId!, req.userRole!, req.userName || '', req.body);
+    return res.json({ success: true, data: updated, message: 'Clinical credentials updated successfully.' });
+  } catch (err: any) {
+    if (err.message.includes('ForbiddenRole')) {
+      return res.status(403).json({ success: false, error: 'Forbidden', message: err.message });
+    }
+    return res.status(500).json({ success: false, error: 'CredentialUpdateError', message: err.message });
+  }
+});
+
+// 4. Update Practitioner Credentials by ID with IDOR protection
+apiRouter.put('/practitioner/credentials/:id', requireRole(['DOCTOR', 'VAIDYA'] as UserRole[]), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const targetId = req.params.id;
+    const isSelf = targetId === req.userId || targetId === 'me';
+    if (!isSelf) {
+      const staff = await prisma.staffMember.findFirst({
+        where: { OR: [{ id: targetId }, { employeeId: targetId }] }
+      });
+      if (!staff || (staff.userId !== req.userId && staff.email.toLowerCase() !== req.userName?.toLowerCase())) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Access denied: Practitioners may only update their own clinical credentials.'
+        });
+      }
+    }
+    const updated = await dbUpdatePractitionerCredentials(req.userId!, req.userRole!, req.userName || '', req.body);
+    return res.json({ success: true, data: updated, message: 'Clinical credentials updated successfully.' });
+  } catch (err: any) {
+    if (err.message.includes('ForbiddenRole')) {
+      return res.status(403).json({ success: false, error: 'Forbidden', message: err.message });
+    }
+    return res.status(500).json({ success: false, error: 'CredentialUpdateError', message: err.message });
+  }
+});
+
+// 5. Alias POST to PUT for initial creation
+apiRouter.post('/practitioner/credentials', requireRole(['DOCTOR', 'VAIDYA'] as UserRole[]), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const updated = await dbUpdatePractitionerCredentials(req.userId!, req.userRole!, req.userName || '', req.body);
+    return res.status(201).json({ success: true, data: updated, message: 'Clinical credentials recorded successfully.' });
+  } catch (err: any) {
+    if (err.message.includes('ForbiddenRole')) {
+      return res.status(403).json({ success: false, error: 'Forbidden', message: err.message });
+    }
+    return res.status(500).json({ success: false, error: 'CredentialUpdateError', message: err.message });
   }
 });
 

@@ -27,6 +27,7 @@ import {
   StockMovement,
   PharmacySupplier,
   StaffMember,
+  PractitionerCredentials,
   DoshaProfile,
   HospitalTariff,
   PatientDossier,
@@ -1746,6 +1747,37 @@ class HospitalApiClient {
     const json = await res.json();
     if (!res.ok || !json.success) {
       throw new Error(json.message || 'Failed to fetch staff history');
+    }
+    return json.data;
+  }
+
+  async getPractitionerCredentials(): Promise<PractitionerCredentials | null> {
+    const res = await fetch('/api/practitioner/credentials', {
+      headers: this.getAuthHeaders()
+    });
+    if (!res.ok) {
+      if (res.status === 403 || res.status === 401) {
+        return null;
+      }
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json.message || `Failed to fetch practitioner credentials (${res.status})`);
+    }
+    const json = await res.json();
+    return json.data || null;
+  }
+
+  async updatePractitionerCredentials(credentials: Partial<PractitionerCredentials>): Promise<PractitionerCredentials> {
+    const res = await fetch('/api/practitioner/credentials', {
+      method: 'PUT',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(credentials)
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || 'Failed to update practitioner credentials');
     }
     return json.data;
   }

@@ -1514,6 +1514,18 @@ export interface StaffMember {
   primaryDepartment?: Department | null;
 }
 
+export interface PractitionerCredentials {
+  qualification: string | null;
+  discipline: string | null;
+  university: string | null;
+  registrationCouncil: string | null;
+  registrationNumber: string | null;
+  registrationDate: string | null;
+  registrationExpiryDate: string | null;
+  supportingCertificate: string | null;
+  updatedAt?: string | null;
+}
+
 // ============================================================================
 // PHASE 6B: HOSPITAL CONFIGURATION & DEPARTMENT MANAGEMENT DOMAIN MODELS
 // ============================================================================
