@@ -19,14 +19,13 @@ import { AppUser, UserRole, ROLE_PERMISSIONS } from '../types/hospital';
 interface RbacManagementViewProps {
   users: AppUser[];
   currentActiveUser: AppUser;
-  onSwitchUser: (userId: string) => void;
+  onSwitchUser?: (userId: string) => void;
   onUpdateUserRole: (userId: string, newRole: UserRole) => void;
 }
 
 export const RbacManagementView: React.FC<RbacManagementViewProps> = ({
   users,
   currentActiveUser,
-  onSwitchUser,
   onUpdateUserRole
 }) => {
   const [activeTab, setActiveTab] = useState<'matrix' | 'users'>('matrix');
@@ -140,25 +139,21 @@ export const RbacManagementView: React.FC<RbacManagementViewProps> = ({
       )
     },
     {
-      key: 'switch',
-      header: 'Active Session',
+      key: 'session',
+      header: 'Session Status',
       render: (u) => {
         const isCurrent = u.id === currentActiveUser.id;
         if (isCurrent) {
           return (
             <span className="px-2 py-1 bg-[#defbe6] text-[#0e6027] font-semibold text-xs border border-[#6fdc8c]">
-              Active User
+              Active Session
             </span>
           );
         }
         return (
-          <CarbonButton
-            kind="ghost"
-            size="sm"
-            onClick={() => onSwitchUser(u.id)}
-          >
-            Switch to This User
-          </CarbonButton>
+          <span className="text-xs text-[#8d8d8d] font-mono">
+            Direct Login Required
+          </span>
         );
       }
     }

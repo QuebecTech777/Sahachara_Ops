@@ -11,8 +11,6 @@ import {
   Command,
   CheckCircle2,
   LogOut,
-  Shield,
-  Key,
   ChevronDown,
   Info,
   UserPlus,
@@ -26,8 +24,8 @@ interface CarbonHeaderProps {
   isSideNavOpen: boolean;
   onToggleSideNav: () => void;
   currentUser: AppUser;
-  users: AppUser[];
-  onSwitchUser: (userId: string) => void;
+  users?: AppUser[];
+  onSwitchUser?: (userId: string) => void;
   onOpenSearch?: () => void;
   theme?: 'g10' | 'g100';
   onToggleTheme?: () => void;
@@ -42,8 +40,6 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
   isSideNavOpen,
   onToggleSideNav,
   currentUser,
-  users,
-  onSwitchUser,
   onOpenSearch,
   theme = 'g10',
   onToggleTheme,
@@ -326,24 +322,9 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
 
             {isProfileOpen && (
               <div
-                className="absolute right-0 top-12 w-72 sm:w-80 max-w-[calc(100vw-16px)] max-h-[calc(100vh-60px)] overflow-y-auto bg-[#161616] border border-[#393939] shadow-2xl text-white p-3 z-50 animate-in fade-in duration-100"
+                className="absolute right-0 top-12 w-44 bg-[#161616] border border-[#393939] shadow-2xl p-1 z-50 animate-in fade-in duration-100"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* 1. Profile Identity Header */}
-                <div className="p-2.5 bg-[#262626] border border-[#393939] mb-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-semibold text-white truncate">{currentUser.name}</div>
-                    <span className="px-1.5 py-0.5 bg-[#0f62fe] text-white font-mono text-[10px] font-semibold">
-                      {currentUser.role}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-[#a6c8ff] font-mono mt-1 truncate">{currentUser.email}</div>
-                  <div className="text-[10px] text-[#8d8d8d] mt-1 font-sans">
-                    Session: <span className="text-[#24a148] font-mono">Authenticated (HIPAA Active)</span>
-                  </div>
-                </div>
-
-                {/* 2. Direct Primary Logout Button right when clicking profile */}
                 <button
                   type="button"
                   onClick={() => {
@@ -354,114 +335,13 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
                       onNavigate('login');
                     }
                   }}
-                  className="w-full h-10 px-3 bg-[#da1e28] hover:bg-[#ba1b23] active:bg-[#750e13] text-white text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer rounded-none shadow-sm mb-2.5 group"
-                  title="Sign Out of Session Immediately"
+                  className="w-full h-10 px-3 flex items-center gap-2.5 text-xs font-semibold text-[#ff8389] hover:bg-[#da1e28] hover:text-white transition-colors cursor-pointer rounded-none group"
+                  title="Log Out of Sahachara Ops"
                   aria-label="Log Out"
                 >
-                  <div className="flex items-center gap-2">
-                    <LogOut className="w-4 h-4 text-white shrink-0" />
-                    <span className="font-semibold tracking-[0.16px]">Log Out</span>
-                  </div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-white/90 bg-black/20 px-1.5 py-0.5 border border-white/20">
-                    Sign Out
-                  </span>
+                  <LogOut className="w-4 h-4 text-[#ff8389] group-hover:text-white shrink-0" />
+                  <span className="font-semibold tracking-[0.16px]">Log Out</span>
                 </button>
-
-                {/* 2. Theme Switcher in Profile Menu */}
-                <div className="p-2 bg-[#262626] border border-[#393939] mb-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {theme === 'g100' ? (
-                      <Sun className="w-4 h-4 text-[#f1c21b] shrink-0" />
-                    ) : (
-                      <Moon className="w-4 h-4 text-[#c6c6c6] shrink-0" />
-                    )}
-                    <div>
-                      <div className="text-xs font-medium text-white">Interface Theme</div>
-                      <div className="text-[10px] text-[#8d8d8d] font-mono">
-                        Carbon {theme === 'g100' ? 'g100 (Dark)' : 'g10 (Light)'}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onToggleTheme) onToggleTheme();
-                    }}
-                    className="px-2.5 py-1 text-[11px] font-mono bg-[#161616] hover:bg-[#393939] text-[#a6c8ff] border border-[#393939] transition-colors cursor-pointer"
-                    title={`Switch to ${theme === 'g100' ? 'Light (g10)' : 'Dark (g100)'} theme`}
-                  >
-                    Switch to {theme === 'g100' ? 'Light' : 'Dark'}
-                  </button>
-                </div>
-
-                {/* 3. Switch Active Role / Account */}
-                <div className="mb-2.5">
-                  <div className="text-[10px] font-mono uppercase text-[#8d8d8d] px-1 mb-1.5 flex items-center justify-between">
-                    <span>Switch Staff Persona</span>
-                    <span className="text-[9px] text-[#525252] font-mono">RBAC</span>
-                  </div>
-                  <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-                    {users.map((u) => (
-                      <button
-                        key={u.id}
-                        onClick={() => {
-                          onSwitchUser(u.id);
-                          setIsProfileOpen(false);
-                        }}
-                        className={`w-full px-2.5 py-1.5 text-left text-xs flex items-center justify-between transition-colors cursor-pointer rounded-none ${
-                          u.id === currentUser.id
-                            ? 'bg-[#0f62fe]/20 text-[#a6c8ff] font-medium border border-[#0f62fe]/50'
-                            : 'text-[#c6c6c6] hover:bg-[#262626] hover:text-white'
-                        }`}
-                      >
-                        <div className="truncate pr-2">
-                          <div className="font-medium truncate">{u.name}</div>
-                          <div className="text-[10px] text-[#8d8d8d]">{u.title || u.role}</div>
-                        </div>
-                        <span className="text-[10px] font-mono px-1 py-0.5 bg-[#161616] text-[#8d8d8d] shrink-0 border border-[#393939]">
-                          {u.role}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 4. Profile & Settings Link and Bottom Log Out Button */}
-                <div className="border-t border-[#393939] pt-2 space-y-1">
-                  <button
-                    onClick={() => {
-                      onNavigate('settings');
-                      setIsProfileOpen(false);
-                    }}
-                    className="w-full px-2.5 py-1.5 text-left text-xs text-[#c6c6c6] hover:bg-[#262626] hover:text-white flex items-center justify-between transition-colors cursor-pointer rounded-none"
-                  >
-                    <span>My Profile & Security Settings</span>
-                    <Key className="w-3.5 h-3.5 text-[#8d8d8d]" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsProfileOpen(false);
-                      if (onSignOut) {
-                        onSignOut();
-                      } else {
-                        onNavigate('login');
-                      }
-                    }}
-                    className="w-full px-2.5 py-2 text-left text-xs font-medium text-[#ff8389] hover:bg-[#da1e28] hover:text-white flex items-center justify-between transition-colors cursor-pointer rounded-none group"
-                    title="Log Out of Sahachara Ops"
-                    aria-label="Log Out"
-                  >
-                    <div className="flex items-center gap-2">
-                      <LogOut className="w-3.5 h-3.5 shrink-0 text-[#ff8389] group-hover:text-white" />
-                      <span className="font-semibold">Log Out</span>
-                    </div>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#8d8d8d] group-hover:text-white">
-                      Sign Out
-                    </span>
-                  </button>
-                </div>
               </div>
             )}
           </div>

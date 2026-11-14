@@ -412,18 +412,6 @@ export default function App() {
   }, [isAuthenticated, refreshData]);
 
 
-  // Switch Active RBAC User Session
-  const handleSwitchUser = (userId: string) => {
-    hospitalApi.setCurrentUser(userId);
-    const updatedUser = hospitalApi.getCurrentUser();
-    setCurrentUser(updatedUser);
-    setNotification({
-      kind: 'info',
-      title: `Switched Session to ${updatedUser.name}`,
-      subtitle: `Active Role: ${updatedUser.role} (${updatedUser.title})`
-    });
-  };
-
   const handleUpdateUserRole = (userId: string, newRole: UserRole) => {
     hospitalApi.updateUserRole(userId, newRole);
     setNotification({
@@ -796,7 +784,6 @@ export default function App() {
         onToggleSideNav={() => setIsSideNavOpen((prev) => !prev)}
         currentUser={currentUser}
         users={users}
-        onSwitchUser={handleSwitchUser}
         onOpenSearch={() => setIsSearchModalOpen(true)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
@@ -925,7 +912,6 @@ export default function App() {
             <RbacManagementView
               users={users}
               currentActiveUser={currentUser}
-              onSwitchUser={handleSwitchUser}
               onUpdateUserRole={handleUpdateUserRole}
             />
           )}
