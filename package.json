@@ -19,7 +19,8 @@
     "test:clinical": "tsx scripts/verify-clinical-operations.ts",
     "test:dispensing": "tsx scripts/verify-pharmacy-dispensing.ts",
     "test:financial": "tsx scripts/verify-financial-operations.ts",
-    "test:staff": "tsx scripts/verify-staff-management.ts"
+    "test:staff": "tsx scripts/verify-staff-management.ts",
+    "test:auth-guard": "tsx scripts/verify-frontend-auth-guard.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

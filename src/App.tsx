@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CarbonHeader } from './components/carbon/CarbonHeader';
 import { CarbonSideNav } from './components/carbon/CarbonSideNav';
 import { CarbonNotification } from './components/carbon/CarbonNotification';
@@ -56,9 +56,73 @@ import {
   DoshaProfile
 } from './types/hospital';
 
+interface RouteState {
+  view: string;
+  isProtected: boolean;
+}
+
+function parseAppRoute(pathname: string, search: string): RouteState {
+  try {
+    const params = new URLSearchParams(search);
+    const viewParam = params.get('view');
+    if (viewParam) {
+      if (viewParam === 'login' || viewParam === 'activate') {
+        return { view: viewParam, isProtected: false };
+      }
+      return { view: viewParam, isProtected: true };
+    }
+  } catch {}
+
+  const cleanPath = pathname.replace(/\/+$/, '') || '/';
+  if (cleanPath === '/' || cleanPath === '/login') {
+    return { view: 'login', isProtected: false };
+  }
+  if (cleanPath === '/activate') {
+    return { view: 'activate', isProtected: false };
+  }
+  if (cleanPath === '/dashboard' || cleanPath === '/overview') {
+    return { view: 'overview', isProtected: true };
+  }
+  if (cleanPath === '/patients') return { view: 'patients', isProtected: true };
+  if (cleanPath === '/appointments') return { view: 'appointments', isProtected: true };
+  if (cleanPath === '/consultations') return { view: 'consultations', isProtected: true };
+  if (cleanPath === '/treatments') return { view: 'treatments', isProtected: true };
+  if (cleanPath === '/panchakarma') return { view: 'panchakarma', isProtected: true };
+  if (cleanPath === '/pharmacy') return { view: 'pharmacy', isProtected: true };
+  if (cleanPath === '/laboratory') return { view: 'laboratory', isProtected: true };
+  if (cleanPath === '/billing') return { view: 'billing', isProtected: true };
+  if (cleanPath === '/reports') return { view: 'reports', isProtected: true };
+  if (cleanPath === '/settings') return { view: 'settings', isProtected: true };
+  if (cleanPath === '/doctors' || cleanPath === '/staff') return { view: 'doctors', isProtected: true };
+  if (cleanPath === '/rbac') return { view: 'rbac', isProtected: true };
+  if (cleanPath === '/audit') return { view: 'audit', isProtected: true };
+
+  return { view: 'overview', isProtected: true };
+}
+
+function syncUrlForView(view: string) {
+  try {
+    const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+    let targetPath = '/';
+    if (view === 'login') {
+      targetPath = '/login';
+    } else if (view === 'activate') {
+      targetPath = '/activate';
+    } else if (view === 'overview') {
+      targetPath = '/dashboard';
+    } else {
+      targetPath = `/${view}`;
+    }
+    if (currentPath !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
+  } catch {}
+}
+
 export default function App() {
-  // Navigation State
-  const [activeView, setActiveView] = useState<string>('overview');
+  // Navigation State & Route Preservation
+  const intendedRouteRef = useRef<string | null>(null);
+  const [activeView, setActiveView] = useState<string>('login');
   const [isSideNavOpen, setIsSideNavOpen] = useState<boolean>(() => {
     try {
       return localStorage.getItem('sahachara.sidebar.collapsed') !== 'true';
@@ -75,6 +139,12 @@ export default function App() {
     } catch {}
     return 'g10';
   });
+
+  // Session Authentication & Authorization State (Fail-Closed Default: false & initializing: true)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthInitializing, setIsAuthInitializing] = useState<boolean>(true);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [users, setUsers] = useState<AppUser[]>([]);
 
   // Sync theme with DOM document and persist to localStorage
   useEffect(() => {
@@ -112,20 +182,110 @@ export default function App() {
     });
   };
 
-  // Session Authentication State
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem('sahachara.auth.session');
-      if (stored === 'false') return false;
-      return true;
-    } catch {
-      return true;
-    }
-  });
+  // Synchronous route resolution and asynchronous session verification on mount
+  useEffect(() => {
+    let isCancelled = false;
 
-  // Active RBAC User Session
-  const [currentUser, setCurrentUser] = useState<AppUser>(hospitalApi.getCurrentUser());
-  const [users, setUsers] = useState<AppUser[]>(hospitalApi.getUsers());
+    const initialRoute = typeof window !== 'undefined'
+      ? parseAppRoute(window.location.pathname, window.location.search)
+      : { view: 'login', isProtected: false };
+
+    if (initialRoute.isProtected) {
+      intendedRouteRef.current = initialRoute.view;
+    }
+
+    const initSession = async () => {
+      try {
+        const token = typeof localStorage !== 'undefined' ? localStorage.getItem('sahachara_auth_token') : null;
+        if (!token) {
+          if (!isCancelled) {
+            setIsAuthenticated(false);
+            setCurrentUser(null);
+            setUsers(hospitalApi.getUsers());
+            setActiveView(initialRoute.view === 'activate' ? 'activate' : 'login');
+            setIsAuthInitializing(false);
+          }
+          return;
+        }
+
+        // Token present -> MUST be verified with backend
+        const res = await hospitalApi.verifySession(token);
+        if (isCancelled) return;
+
+        if (res.success && res.user) {
+          setIsAuthenticated(true);
+          setCurrentUser(res.user);
+          setUsers(hospitalApi.getUsers());
+          const target = intendedRouteRef.current;
+          const nextView = target && target !== 'login' && target !== 'activate' ? target : 'overview';
+          setActiveView(nextView);
+          syncUrlForView(nextView);
+          intendedRouteRef.current = null;
+        } else {
+          // Token is expired, invalid, tampered, or rejected by backend -> Fail closed
+          console.warn('[Sahachara Ops] Session verification failed or token expired:', res.error);
+          hospitalApi.logout();
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          setUsers(hospitalApi.getUsers());
+          setActiveView('login');
+          syncUrlForView('login');
+        }
+      } catch (err) {
+        // Network failure during session verification -> Fail closed
+        console.error('[Sahachara Ops] Network failure during session verification:', err);
+        hospitalApi.logout();
+        if (!isCancelled) {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+          setUsers(hospitalApi.getUsers());
+          setActiveView('login');
+          syncUrlForView('login');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsAuthInitializing(false);
+        }
+      }
+    };
+
+    initSession();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  // Listen for browser navigation (back / forward buttons)
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = parseAppRoute(window.location.pathname, window.location.search);
+      if (route.isProtected && !isAuthenticated) {
+        intendedRouteRef.current = route.view;
+        setActiveView('login');
+      } else {
+        setActiveView(route.view);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isAuthenticated]);
+
+  const handleNavigate = (viewId: string) => {
+    if (!isAuthenticated) {
+      if (viewId === 'login' || viewId === 'activate') {
+        setActiveView(viewId);
+        syncUrlForView(viewId);
+      } else {
+        intendedRouteRef.current = viewId;
+        setActiveView('login');
+        syncUrlForView('login');
+      }
+      return;
+    }
+    setActiveView(viewId);
+    syncUrlForView(viewId);
+  };
 
   // Global Keyboard Shortcut: ⌘K or Ctrl+K for Operational Search
   useEffect(() => {
@@ -182,8 +342,9 @@ export default function App() {
   // Patient context for targeted actions
   const [contextPatient, setContextPatient] = useState<Patient | null>(null);
 
-  // Refresh all state
+  // Refresh all state (Only when authenticated)
   const refreshData = useCallback(async () => {
+    if (!isAuthenticated) return;
     try {
       const curUser = hospitalApi.getCurrentUser();
       setCurrentUser(curUser);
@@ -238,15 +399,17 @@ export default function App() {
     } catch (err) {
       console.error('Failed to refresh SahacharaOS hospital data:', err);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    refreshData();
-    const unsubscribe = hospitalApi.subscribe(() => {
+    if (isAuthenticated) {
       refreshData();
-    });
-    return unsubscribe;
-  }, [refreshData]);
+      const unsubscribe = hospitalApi.subscribe(() => {
+        refreshData();
+      });
+      return unsubscribe;
+    }
+  }, [isAuthenticated, refreshData]);
 
 
   // Switch Active RBAC User Session
@@ -526,13 +689,12 @@ export default function App() {
   };
 
   const handleSignOut = useCallback(() => {
-    try {
-      localStorage.setItem('sahachara.auth.session', 'false');
-    } catch (err) {
-      console.error(err);
-    }
+    hospitalApi.logout();
     setIsAuthenticated(false);
+    setCurrentUser(null);
+    intendedRouteRef.current = null;
     setActiveView('login');
+    syncUrlForView('login');
     setNotification({
       kind: 'info',
       title: 'Signed Out Successfully',
@@ -546,27 +708,66 @@ export default function App() {
     } catch (err) {
       console.error(err);
     }
-    if (user) {
-      hospitalApi.setCurrentUser(user.id);
-      setCurrentUser(user);
-    }
+    const targetUser = user || hospitalApi.getCurrentUser();
+    hospitalApi.setCurrentUser(targetUser.id);
+    setCurrentUser(targetUser);
     setIsAuthenticated(true);
-    setActiveView('overview');
+    setUsers(hospitalApi.getUsers());
+
+    const target = intendedRouteRef.current;
+    const nextView = target && target !== 'login' && target !== 'activate' ? target : 'overview';
+    setActiveView(nextView);
+    syncUrlForView(nextView);
+    intendedRouteRef.current = null;
+
     setNotification({
       kind: 'success',
       title: 'Authentication Successful',
-      subtitle: `Welcome back, ${user ? user.name : currentUser.name} (${user ? user.role : currentUser.role}).`
+      subtitle: `Welcome back, ${targetUser.name} (${targetUser.role}).`
     });
-  }, [currentUser]);
+  }, []);
 
-  if (!isAuthenticated || activeView === 'login' || activeView === 'activate') {
+  const handleReturnToDashboard = useCallback(() => {
+    if (isAuthenticated && currentUser) {
+      setActiveView('overview');
+      syncUrlForView('overview');
+    } else {
+      setActiveView('login');
+      syncUrlForView('login');
+    }
+  }, [isAuthenticated, currentUser]);
+
+  // Loading & Session Authentication Initialization Guard (Prevents UI Flashing)
+  if (isAuthInitializing) {
+    return (
+      <div
+        data-carbon-theme={theme}
+        className={`min-h-screen ${
+          theme === 'g100' ? 'bg-[#161616] text-[#f4f4f4]' : 'bg-[#f4f4f4] text-[#161616]'
+        } flex flex-col items-center justify-center p-6 select-none`}
+      >
+        <div className="flex flex-col items-center max-w-sm w-full text-center">
+          <div className="relative w-12 h-12 mb-4">
+            <div className="absolute inset-0 rounded-full border-4 border-[#0f62fe]/20" />
+            <div className="absolute inset-0 rounded-full border-4 border-[#0f62fe] border-t-transparent animate-spin" />
+          </div>
+          <div className="font-semibold text-base mb-1 tracking-tight">Sahachara Ops</div>
+          <div className="text-xs text-[#525252] dark:text-[#8d8d8d]">Verifying clinical session security...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Centralized Route Protection Guard:
+  // Strictly blocks dashboard and all 14 operational modules for unauthenticated visitors
+  if (!isAuthenticated || !currentUser || activeView === 'login' || activeView === 'activate') {
     return (
       <AuthScreenView
         initialMode={activeView === 'activate' ? 'activate' : 'login'}
         onLoginSuccess={handleLoginSuccess}
-        onReturnToDashboard={() => handleLoginSuccess(currentUser)}
+        onReturnToDashboard={handleReturnToDashboard}
         users={users}
-        currentUser={currentUser}
+        currentUser={currentUser || undefined}
       />
     );
   }
@@ -581,7 +782,7 @@ export default function App() {
       {/* IBM Carbon Shell Header (48px) */}
       <CarbonHeader
         activeView={activeView}
-        onNavigate={setActiveView}
+        onNavigate={handleNavigate}
         isSideNavOpen={isSideNavOpen}
         onToggleSideNav={() => setIsSideNavOpen((prev) => !prev)}
         currentUser={currentUser}
@@ -603,7 +804,7 @@ export default function App() {
         {/* Carbon SideNav */}
         <CarbonSideNav
           activeView={activeView}
-          onNavigate={setActiveView}
+          onNavigate={handleNavigate}
           isOpen={isSideNavOpen}
           onToggle={() => setIsSideNavOpen((prev) => !prev)}
           currentUser={currentUser}
@@ -638,7 +839,7 @@ export default function App() {
               panchakarma={panchakarma}
               prescriptions={prescriptions}
               currentUser={currentUser}
-              onNavigate={setActiveView}
+              onNavigate={handleNavigate}
               onOpenNewAppointmentModal={() => {
                 setContextPatient(null);
                 setIsNewAppointmentModalOpen(true);
@@ -787,8 +988,8 @@ export default function App() {
               doctors={doctors}
               currentUser={currentUser}
               onSaveConsultation={handleSaveConsultation}
-              onNavigateToTreatments={() => setActiveView('treatments')}
-              onNavigateToPharmacy={() => setActiveView('pharmacy')}
+              onNavigateToTreatments={() => handleNavigate('treatments')}
+              onNavigateToPharmacy={() => handleNavigate('pharmacy')}
             />
           )}
 

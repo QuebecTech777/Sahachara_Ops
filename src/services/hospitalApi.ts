@@ -158,13 +158,16 @@ class HospitalApiClient {
   private localSuppliers: PharmacySupplier[] = loadOr('suppliers', INITIAL_SUPPLIERS);
   private localStaff: StaffMember[] = loadOr('staff', INITIAL_STAFF);
   private localTariffs: HospitalTariff[] = loadOr('tariffs', INITIAL_TARIFFS);
-  private currentUserId: string = loadOr('current_user_id', 'usr-admin');
+  private currentUserId: string = loadOr('current_user_id', '');
 
   constructor() {
     this.init().catch(() => {});
   }
 
   async init(): Promise<void> {
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem('sahachara_auth_token')) {
+      return;
+    }
     try {
       const auth = this.getAuthHeaders();
       const [
@@ -305,6 +308,7 @@ class HospitalApiClient {
       if (data.success && data.user) {
         if (data.token && typeof localStorage !== 'undefined') {
           localStorage.setItem('sahachara_auth_token', data.token);
+          localStorage.setItem('sahachara.auth.session', 'true');
         }
         const idx = this.localUsers.findIndex((u) => u.email.toLowerCase() === data.user.email.toLowerCase());
         if (idx >= 0) {
@@ -335,6 +339,7 @@ class HospitalApiClient {
       if (data.success && data.user) {
         if (data.token && typeof localStorage !== 'undefined') {
           localStorage.setItem('sahachara_auth_token', data.token);
+          localStorage.setItem('sahachara.auth.session', 'true');
         }
         const idx = this.localUsers.findIndex((u) => u.email.toLowerCase() === data.user.email.toLowerCase());
         if (idx >= 0) {
@@ -364,6 +369,57 @@ class HospitalApiClient {
   subscribe(listener: Listener): () => void {
     listeners.add(listener);
     return () => listeners.delete(listener);
+  }
+
+  // Session Verification & Lifecycle
+  async verifySession(tokenOverride?: string): Promise<{ success: boolean; user?: AppUser; error?: string }> {
+    try {
+      const token = tokenOverride || (typeof localStorage !== 'undefined' ? localStorage.getItem('sahachara_auth_token') : null);
+      if (!token) {
+        return { success: false, error: 'No active session token' };
+      }
+      const res = await fetch('/api/auth/verify', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const errorJson = await res.json().catch(() => ({}));
+        return { success: false, error: errorJson.message || `Session verification failed (HTTP ${res.status})` };
+      }
+      const data = await res.json();
+      if (data.success && data.user) {
+        this.currentUserId = data.user.id;
+        if (typeof localStorage !== 'undefined') {
+          save('current_user_id', data.user.id);
+          localStorage.setItem('sahachara.auth.session', 'true');
+          const idx = this.localUsers.findIndex((u) => u.id === data.user.id || u.email.toLowerCase() === data.user.email.toLowerCase());
+          if (idx >= 0) {
+            this.localUsers[idx] = data.user;
+          } else {
+            this.localUsers.push(data.user);
+          }
+          save('users', this.localUsers);
+        }
+        notifyListeners();
+        return { success: true, user: data.user };
+      }
+      return { success: false, error: data.error || data.message || 'Session verification failed' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error during session verification' };
+    }
+  }
+
+  logout(): void {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('sahachara_auth_token');
+      localStorage.setItem('sahachara.auth.session', 'false');
+      localStorage.removeItem('current_user_id');
+    }
+    this.currentUserId = '';
+    notifyListeners();
   }
 
   // Current User & RBAC Management

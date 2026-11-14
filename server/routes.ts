@@ -19,7 +19,8 @@ import {
   MedicationStock,
   UserRole,
   VALID_USER_ROLES,
-  HospitalTariff
+  HospitalTariff,
+  AppUser
 } from '../src/types/hospital.ts';
 import {
   authenticateContext,
@@ -36,6 +37,7 @@ import {
 } from './supabaseServer.ts';
 import {
   prisma,
+  isPrismaConnected,
   dbGetHospitalProfile,
   dbUpdateHospitalProfile,
   dbGetDepartments,
@@ -233,6 +235,46 @@ apiRouter.post('/auth/activate', async (req: Request, res: Response) => {
     return res.status(400).json(result);
   }
   res.json(result);
+});
+
+// Verify active session token and return authenticated user identity
+apiRouter.get(['/auth/verify', '/auth/me'], requireRole(VALID_USER_ROLES as unknown as UserRole[]), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    let department = '';
+    let email = '';
+    let title = `${req.userRole}`;
+    if (isPrismaConnected && req.userId) {
+      try {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: req.userId },
+          select: { id: true, department: true, email: true, name: true, role: true }
+        });
+        if (dbUser) {
+          department = dbUser.department;
+          email = dbUser.email;
+          title = `${dbUser.role} - ${dbUser.department}`;
+        }
+      } catch {
+        // Fallback to token information if DB lookup fails
+      }
+    }
+    const user: AppUser = {
+      id: req.userId!,
+      name: req.userName || 'Staff Member',
+      role: req.userRole!,
+      title,
+      email: email || '',
+      department: department || '',
+      avatarInitials: (req.userName || 'SM').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(),
+      status: 'active'
+    };
+    res.json({
+      success: true,
+      user
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'Session verification failed' });
+  }
 });
 
 // Official clinic metadata
