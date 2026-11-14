@@ -209,6 +209,41 @@ async function runVerification() {
     assert(profile !== null, `Prisma hospitalProfile.findFirst() succeeded (institution: ${profile?.displayName})`);
 
     // ------------------------------------------------------------------
+    // TEST 7: Actual Prisma Backend Ledger Immutability Enforcement
+    // ------------------------------------------------------------------
+    console.log('\n[TEST 7] Verifying backend Prisma connection (postgres role with BYPASSRLS) ledger immutability...');
+    
+    // Create an audit log record through ordinary Prisma connection
+    const testLog = await prisma.auditLog.create({
+      data: {
+        action: 'RLS_IMMUTABILITY_PROBE',
+        actor: 'Security Audit',
+        role: 'SUPER_ADMIN',
+        category: 'Security',
+        details: 'Initial immutable entry'
+      }
+    });
+    assert(Boolean(testLog.id), 'Prisma permitted to append audit_logs entry');
+
+    // Attempt UPDATE on audit_logs through Prisma connection
+    let auditLogUpdateBlocked = false;
+    try {
+      await prisma.$executeRawUnsafe(`UPDATE public.audit_logs SET details = 'tampered' WHERE id = '${testLog.id}';`);
+    } catch (err: any) {
+      auditLogUpdateBlocked = err.message.includes('IMMUTABLE_RECORD') || err.message.includes('strictly immutable');
+    }
+    assert(auditLogUpdateBlocked, 'Prisma connection (postgres with BYPASSRLS) UPDATE on audit_logs blocked by trigger');
+
+    // Attempt DELETE on audit_logs through Prisma connection
+    let auditLogDeleteBlocked = false;
+    try {
+      await prisma.$executeRawUnsafe(`DELETE FROM public.audit_logs WHERE id = '${testLog.id}';`);
+    } catch (err: any) {
+      auditLogDeleteBlocked = err.message.includes('IMMUTABLE_RECORD') || err.message.includes('strictly immutable');
+    }
+    assert(auditLogDeleteBlocked, 'Prisma connection (postgres with BYPASSRLS) DELETE on audit_logs blocked by trigger');
+
+    // ------------------------------------------------------------------
     // SUMMARY
     // ------------------------------------------------------------------
     console.log('\n====================================================================');

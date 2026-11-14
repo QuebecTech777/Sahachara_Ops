@@ -99,13 +99,13 @@ async function runTests() {
   if (isPrismaConnected) {
     try {
       if (process.env.DATABASE_URL?.includes('test_db') || process.env.DATABASE_URL?.includes('sahachara_ops_test')) {
-        await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries CASCADE').catch(() => {});
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries, rate_histories, dispensing_records CASCADE').catch(() => {});
       }
       await (prisma as any).paymentAllocation?.deleteMany({});
       await (prisma as any).refundRequest?.deleteMany({});
       await (prisma as any).payment?.deleteMany({});
-      await (prisma as any).dispensingRecord?.deleteMany({});
-      await prisma.rateHistory.deleteMany({});
+      await (prisma as any).dispensingRecord?.deleteMany({}).catch(() => {});
+      await prisma.rateHistory.deleteMany({}).catch(() => {});
       await prisma.stockMovement.deleteMany({});
       await prisma.medicationStock.deleteMany({});
       await prisma.invoice.deleteMany({});
@@ -1119,8 +1119,10 @@ async function runTests() {
 
       // Clean up test service if created
       if (createdServiceId && isPrismaConnected) {
-        await prisma.rateHistory.deleteMany({ where: { tariffId: createdServiceId } });
-        await prisma.hospitalTariff.deleteMany({ where: { id: createdServiceId } });
+        if (process.env.DATABASE_URL?.includes('test_db') || process.env.DATABASE_URL?.includes('sahachara_ops_test')) {
+          await prisma.$executeRawUnsafe('TRUNCATE TABLE rate_histories CASCADE').catch(() => {});
+        }
+        await prisma.hospitalTariff.deleteMany({ where: { id: createdServiceId } }).catch(() => {});
       }
 
       // Verify in DB directly that clean state is preserved
@@ -1153,13 +1155,13 @@ async function runTests() {
     // Clean up test data from sahachara_ops_test_db
     if (isPrismaConnected) {
       if (process.env.DATABASE_URL?.includes('test_db') || process.env.DATABASE_URL?.includes('sahachara_ops_test')) {
-        await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries CASCADE').catch(() => {});
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries, rate_histories, dispensing_records CASCADE').catch(() => {});
       }
       await (prisma as any).paymentAllocation?.deleteMany({});
       await (prisma as any).refundRequest?.deleteMany({});
       await (prisma as any).payment?.deleteMany({});
-      await (prisma as any).dispensingRecord?.deleteMany({});
-      await prisma.rateHistory.deleteMany({});
+      await (prisma as any).dispensingRecord?.deleteMany({}).catch(() => {});
+      await prisma.rateHistory.deleteMany({}).catch(() => {});
       await prisma.stockMovement.deleteMany({});
       await prisma.medicationStock.deleteMany({});
       await prisma.invoice.deleteMany({});

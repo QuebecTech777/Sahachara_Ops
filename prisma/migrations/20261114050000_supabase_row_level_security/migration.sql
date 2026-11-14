@@ -47,6 +47,67 @@ REVOKE UPDATE, DELETE ON public.refund_ledger_entries FROM service_role, anon, a
 REVOKE UPDATE, DELETE ON public.rate_histories FROM service_role, anon, authenticated;
 REVOKE UPDATE, DELETE ON public.dispensing_records FROM service_role, anon, authenticated;
 
+-- Enforce application-level ledger immutability against ordinary UPDATE and DELETE operations
+-- for all backend database connections (including Prisma connecting as postgres with BYPASSRLS).
+-- Security boundary note: A database superuser or table owner may still alter protections via DDL;
+-- this protection prevents ordinary application-level mutations through the backend connection.
+CREATE OR REPLACE FUNCTION public.prevent_ledger_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'IMMUTABLE_RECORD: % records are strictly immutable and cannot be updated or deleted.', TG_TABLE_NAME;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.prevent_dispensing_record_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'IMMUTABLE_RECORD: dispensing_records are strictly immutable and cannot be deleted.';
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF (NEW."id" IS DISTINCT FROM OLD."id" OR
+            NEW."dispenseNumber" IS DISTINCT FROM OLD."dispenseNumber" OR
+            NEW."prescriptionId" IS DISTINCT FROM OLD."prescriptionId" OR
+            NEW."encounterId" IS DISTINCT FROM OLD."encounterId" OR
+            NEW."patientId" IS DISTINCT FROM OLD."patientId" OR
+            NEW."patientName" IS DISTINCT FROM OLD."patientName" OR
+            NEW."mrn" IS DISTINCT FROM OLD."mrn" OR
+            NEW."medicationStockId" IS DISTINCT FROM OLD."medicationStockId" OR
+            NEW."drugName" IS DISTINCT FROM OLD."drugName" OR
+            NEW."batchNumber" IS DISTINCT FROM OLD."batchNumber" OR
+            NEW."expiryDate" IS DISTINCT FROM OLD."expiryDate" OR
+            NEW."quantityDispensed" IS DISTINCT FROM OLD."quantityDispensed" OR
+            NEW."dispensedAt" IS DISTINCT FROM OLD."dispensedAt" OR
+            NEW."dispensedById" IS DISTINCT FROM OLD."dispensedById" OR
+            NEW."dispensedByName" IS DISTINCT FROM OLD."dispensedByName" OR
+            NEW."dispensedByRole" IS DISTINCT FROM OLD."dispensedByRole" OR
+            NEW."createdAt" IS DISTINCT FROM OLD."createdAt") THEN
+            RAISE EXCEPTION 'IMMUTABLE_RECORD: dispensing_records clinical dispensing data is strictly immutable and cannot be modified.';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Attach unconditional immutability triggers to audit_logs, rate_histories, and dispensing_records
+-- (Note: refund_ledger_entries is already protected by trg_prevent_refund_ledger_mutation from migration 20261113060000)
+DROP TRIGGER IF EXISTS trg_prevent_audit_log_mutation ON public.audit_logs;
+CREATE TRIGGER trg_prevent_audit_log_mutation
+BEFORE UPDATE OR DELETE ON public.audit_logs
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_ledger_mutation();
+
+DROP TRIGGER IF EXISTS trg_prevent_rate_history_mutation ON public.rate_histories;
+CREATE TRIGGER trg_prevent_rate_history_mutation
+BEFORE UPDATE OR DELETE ON public.rate_histories
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_ledger_mutation();
+
+DROP TRIGGER IF EXISTS trg_prevent_dispensing_record_mutation ON public.dispensing_records;
+CREATE TRIGGER trg_prevent_dispensing_record_mutation
+BEFORE UPDATE OR DELETE ON public.dispensing_records
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_dispensing_record_mutation();
+
 -- 4. Context helper functions for transaction-scoped application identity
 CREATE OR REPLACE FUNCTION public.app_current_user_id() RETURNS TEXT AS $$
 BEGIN

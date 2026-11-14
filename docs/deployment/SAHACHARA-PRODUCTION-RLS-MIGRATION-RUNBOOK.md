@@ -214,13 +214,15 @@ psql "postgresql://localhost:5432/sahachara_restore_verify_test" -c "
 dropdb sahachara_restore_verify_test
 ```
 
-### 2.5 Realistic Recovery Objectives (Measured & Unresolved)
-- **Measured Local Execution (Empirical):** On the baseline dataset (1 user, 1 profile, 38 tables), logical `pg_dump` completed in **0.24 seconds** and `pg_restore` completed in **0.42 seconds**.
-- **Production RPO Target:** Dependent on pre-migration backup completion. If the manual snapshot is taken immediately prior to migration execution during an operational pause, the effective RPO is **0 seconds**.
-- **Production RTO Target:**
-  - For Tier 1 (In-Place Policy Remediation): **< 2 minutes**.
-  - For Tier 2 (Supabase Dashboard PITR): **Unresolved platform target** (typically 10–25 minutes depending on Supabase infrastructure provisioning).
-  - For Tier 4 (Full Logical Restore): **< 10 minutes** (including verification steps).
+### 2.5 Operational Recovery Objectives & Platform Realities
+- **Local Test Timings (Non-Production):** While local tests on a minimal test dataset took ~0.24s for `pg_dump` and ~0.42s for `pg_restore`, these local numbers do NOT constitute production recovery guarantees.
+- **Production Recovery Point Objective (RPO):**
+  - **Manual Snapshot:** When an immediate `pg_dump` is taken directly prior to running the migration during an operational pause, the potential data loss window for pre-migration state is bounded by the pause window. However, zero-second RPO cannot be guaranteed without transactional connection freezing.
+  - **Supabase PITR:** Granular point-in-time recovery precision depends on the continuous WAL archiving frequency of the Supabase managed instance (typically bounded to within seconds or minutes).
+- **Production Recovery Time Objective (RTO):**
+  - **Tier 1 (In-Place DDL/Grant Remediation):** Estimated at **< 2 minutes** (direct execution of single DDL statement).
+  - **Tier 2 (Supabase Dashboard PITR):** **Unresolved platform target** (typically 10–25 minutes depending on Supabase platform provisioning and snapshot restore times).
+  - **Tier 3 / 4 (Logical Restore):** Dependent on network transfer to Mumbai (`ap-south-1`) and database restore verification. Full restoration is an unresolved operational target that must be verified in a pre-production staging environment.
 
 ---
 
@@ -252,21 +254,21 @@ To establish empirical evidence of rollback behavior, a simulated migration fail
 5. **Connection Pooler Consideration:**  
    The production backend connects via Supabase Session Pooler (`port 5432`). In Session pooler mode, multi-statement transactions are natively supported by PostgreSQL without pooler interference.
 
-### 3.3 Measured Execution Duration
+### 3.3 Measured Execution Duration & Lock Characteristics
 - **[VERIFIED FACT]** In isolated baseline testing against the 23-migration schema, `npx prisma migrate deploy` executed in **0.898 seconds**.
-- Total table lock duration is sub-millisecond per table, causing negligible impact on running services.
+- **Table Lock Behavior:** `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` and `CREATE POLICY` statements acquire `AccessExclusiveLock` on each individual table. While these DDL operations do not rewrite table data, actual lock acquisition duration is governed by PostgreSQL lock queues and concurrent active transactions. During an operational pause with no long-running transactions, lock contention is minimized; however, sub-millisecond lock acquisition cannot be guaranteed in a concurrent production environment.
 
 ---
 
-## 4. Service Role Access Control Architecture
+## 4. Service Role and Prisma Connection Access Control Architecture
 
 ### 4.1 `service_role` and `rolbypassrls = true`
 - **[VERIFIED FACT]** In Supabase PostgreSQL, `service_role` is created with `rolbypassrls = true` in `pg_roles`.
 - **Architectural Consequence:** RLS policies (`CREATE POLICY ... TO service_role`) **DO NOT constrain the `service_role` role**. PostgreSQL completely bypasses row-level policy filters for any role with `BYPASSRLS`.
 - **Correction to Prior Assumptions:** Creating a permissive or restrictive RLS policy for `service_role` has zero effect on whether it can read or write rows.
 
-### 4.2 Role of PostgreSQL Grants for Ledger Immutability
-Because RLS cannot restrict a `BYPASSRLS` role, the immutability of the four financial and audit ledgers is enforced strictly via **PostgreSQL table-level privilege grants**:
+### 4.2 Role of PostgreSQL Grants for PostgREST Immutability
+For untrusted external access via PostgREST, immutability of the four financial and audit ledgers is enforced strictly via **PostgreSQL table-level privilege grants**:
 - `public.audit_logs`
 - `public.refund_ledger_entries`
 - `public.rate_histories`
@@ -279,8 +281,24 @@ REVOKE UPDATE, DELETE ON public.refund_ledger_entries FROM service_role, anon, a
 REVOKE UPDATE, DELETE ON public.rate_histories FROM service_role, anon, authenticated;
 REVOKE UPDATE, DELETE ON public.dispensing_records FROM service_role, anon, authenticated;
 ```
-Even with `BYPASSRLS`, when `service_role` attempts an `UPDATE` or `DELETE` on these tables, PostgreSQL immediately halts execution with:
+Even with `BYPASSRLS`, when `service_role` attempts an `UPDATE` or `DELETE` on these tables via PostgREST, PostgreSQL immediately halts execution with:
 `ERROR: 42501 permission denied for table <ledger_table>`
+
+### 4.3 Trigger-Based Ledger Immutability for the Backend Prisma Connection
+Because the backend Express application connects via Prisma using the `postgres` role (which has `BYPASSRLS` and table ownership privileges), grant-based restrictions do not constrain `postgres`.
+
+To prevent ordinary application-level `UPDATE` and `DELETE` operations through the actual backend database connection, migration `20261114050000_supabase_row_level_security` attaches unconditional `BEFORE UPDATE OR DELETE` triggers to all four ledgers:
+- `audit_logs` -> `trg_prevent_audit_log_mutation`
+- `rate_histories` -> `trg_prevent_rate_history_mutation`
+- `dispensing_records` -> `trg_prevent_dispensing_record_mutation`
+- `refund_ledger_entries` -> `trg_prevent_refund_ledger_mutation` (pre-existing from migration `20261113060000`)
+
+When any query through Prisma attempts to mutate or delete an existing ledger row, PostgreSQL executes the trigger function `prevent_ledger_mutation()` and throws an exception (`P0001`):
+`ERROR: IMMUTABLE_RECORD: <table_name> records are strictly immutable and cannot be updated or deleted.`
+
+> [!IMPORTANT]
+> **Precise Security Boundary Definition:**  
+> This trigger mechanism guarantees that ordinary application-level SQL statements (including all Prisma queries connecting through the backend connection pooler) cannot modify or delete existing ledger rows. However, a database superuser or table owner may still alter database protections via administrative DDL (e.g. `ALTER TABLE ... DISABLE TRIGGER`). We do not claim absolute immutability against a compromised administrative role.
 
 ---
 

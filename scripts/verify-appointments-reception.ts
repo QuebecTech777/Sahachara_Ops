@@ -157,7 +157,7 @@ async function runVerification() {
       where: {
         category: { in: ['Reception Operations', 'Appointments & Scheduling'] }
       }
-    });
+    }).catch(() => {});
 
     // Create 3 registered test patients in test DB
     const patientA = await prisma.patient.create({

@@ -142,13 +142,13 @@ async function runVerification() {
   try {
     // Clean test DB patient child tables first to ensure clean state
     if (process.env.DATABASE_URL?.includes('test_db') || process.env.DATABASE_URL?.includes('sahachara_ops_test')) {
-      await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries CASCADE').catch(() => {});
+      await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries, rate_histories, dispensing_records CASCADE').catch(() => {});
     }
     await (prisma as any).paymentAllocation?.deleteMany({});
     await (prisma as any).refundRequest?.deleteMany({});
     await (prisma as any).payment?.deleteMany({});
-    await (prisma as any).dispensingRecord?.deleteMany({});
-    await prisma.rateHistory.deleteMany({});
+    await (prisma as any).dispensingRecord?.deleteMany({}).catch(() => {});
+    await prisma.rateHistory.deleteMany({}).catch(() => {});
     await prisma.stockMovement.deleteMany({});
     await prisma.medicationStock.deleteMany({});
     await prisma.invoice.deleteMany({});
@@ -634,13 +634,13 @@ async function runVerification() {
 
     // Clean up test DB fixtures
     if (process.env.DATABASE_URL?.includes('test_db') || process.env.DATABASE_URL?.includes('sahachara_ops_test')) {
-      await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries CASCADE').catch(() => {});
+      await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries, rate_histories, dispensing_records CASCADE').catch(() => {});
     }
     await (prisma as any).paymentAllocation?.deleteMany({});
     await (prisma as any).refundRequest?.deleteMany({});
     await (prisma as any).payment?.deleteMany({});
-    await (prisma as any).dispensingRecord?.deleteMany({});
-    await prisma.rateHistory.deleteMany({});
+    await (prisma as any).dispensingRecord?.deleteMany({}).catch(() => {});
+    await prisma.rateHistory.deleteMany({}).catch(() => {});
     await prisma.stockMovement.deleteMany({});
     await prisma.medicationStock.deleteMany({});
     await prisma.invoice.deleteMany({});

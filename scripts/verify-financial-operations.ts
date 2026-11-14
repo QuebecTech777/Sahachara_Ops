@@ -1352,12 +1352,12 @@ async function runFinancialOperationsSuite() {
   } finally {
     try {
       if (process.env.DATABASE_URL?.includes('test_db') || process.env.DATABASE_URL?.includes('sahachara_ops_test')) {
-        await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE refund_ledger_entries, rate_histories, dispensing_records CASCADE').catch(() => {});
       }
       await prisma.refundRequest.deleteMany({});
       await prisma.payment.deleteMany({});
       await prisma.financialIdempotency.deleteMany({});
-      await prisma.dispensingRecord.deleteMany({});
+      await prisma.dispensingRecord.deleteMany({}).catch(() => {});
       await prisma.prescription.deleteMany({});
       await prisma.invoice.deleteMany({});
       await prisma.patient.deleteMany({
