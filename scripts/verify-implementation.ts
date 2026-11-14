@@ -343,8 +343,8 @@ async function runVerification() {
     }
     console.log('✓ PASSED: Hospital billing operates strictly in authentic native INR without any 82x multiplier.\n');
 
-    // TEST 7: Unconfigured Bed Tariff Guard
-    console.log('--- TEST 7: Unconfigured Bed Tariff Guard ---');
+    // TEST 7: Unconfigured Tariff Guard
+    console.log('--- TEST 7: Unconfigured Tariff Guard ---');
     const unconfiguredBillRes = await fetch(`${BASE_URL}/billing`, {
       method: 'POST',
       headers: {
@@ -356,7 +356,7 @@ async function runVerification() {
         patientName: `${createdPatient.firstName} ${createdPatient.lastName}`,
         mrn: createdPatient.mrn,
         items: [
-          { description: 'Inpatient Bed Ward Stay', category: 'Bed/Room', quantity: 5, unitPrice: 0, total: 0 }
+          { description: 'Unconfigured Ambulatory Therapy Session', category: 'Treatment', quantity: 1, unitPrice: 0, total: 0 }
         ],
         subtotal: 0,
         totalAmount: 0
@@ -366,9 +366,9 @@ async function runVerification() {
     const unconfiguredJson = await unconfiguredBillRes.json();
     console.log('Response Payload:', unconfiguredJson);
     if (unconfiguredBillRes.status !== 400 || unconfiguredJson.success !== false) {
-      throw new Error('FAIL: Unconfigured bed tariff was not blocked with HTTP 400!');
+      throw new Error('FAIL: Unconfigured tariff was not blocked with HTTP 400!');
     }
-    console.log('✓ PASSED: Billing against unconfigured bed tariffs is strictly blocked with HTTP 400.\n');
+    console.log('✓ PASSED: Billing against unconfigured tariffs is strictly blocked with HTTP 400.\n');
 
     // TEST 8: Monetary Precision & PostgreSQL DECIMAL(12,2) Verification
     console.log('--- TEST 8: Monetary Precision & PostgreSQL DECIMAL(12,2) Verification ---');

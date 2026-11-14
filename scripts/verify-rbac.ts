@@ -330,7 +330,7 @@ async function runTests() {
     const adminTariffRes = await call({
       name: 'ADMIN cannot configure hospital tariffs (SUPER_ADMIN exclusive)',
       method: 'PATCH',
-      path: '/tariffs/trf-bed-gen/rate',
+      path: '/tariffs/TEST-UNAUTH-TARIFF/rate',
       token: tokens.ADMIN,
       body: { rate: 1250 },
       expectedStatus: 403
@@ -653,7 +653,7 @@ async function runTests() {
     const tariffEditRes = await call({
       name: 'ACCOUNTANT cannot configure tariffs',
       method: 'PATCH',
-      path: '/tariffs/trf-bed-gen',
+      path: '/tariffs/TEST-UNAUTH-TARIFF',
       token: tokens.ACCOUNTANT,
       body: { rate: 500 },
       expectedStatus: 403
@@ -763,10 +763,6 @@ async function runTests() {
   // -------------------------------------------------------------
   console.log(`\n${YELLOW}10. Tariff Configuration & Billing Enforcement Verification${RESET}`);
   {
-    // Ensure clean initial state for tariffs before test execution
-    await dbUpdateTariffRate('trf-bed-gen', null, false, 'Pre-Test Sanitizer');
-    await dbUpdateTariffRate('trf-triage-eval', null, false, 'Pre-Test Sanitizer');
-
     // 10.1 Billing attempt with an unconfigured rate (null) is rejected with 400
     const unconfigRes = await call({
       name: 'Billing with unconfigured tariff rate is rejected with 400 Bad Request',
@@ -779,8 +775,8 @@ async function runTests() {
         mrn: 'MRN-84920',
         items: [
           {
-            description: 'General Ward Accommodation',
-            category: 'Bed/Room',
+            description: 'Unconfigured Ambulatory Therapy',
+            category: 'Treatment',
             quantity: 3,
             unitPrice: null, // Explicitly UNCONFIGURED
             total: 0
@@ -803,8 +799,8 @@ async function runTests() {
         mrn: 'MRN-84920',
         items: [
           {
-            description: 'Emergency Triage & Vital Signs Evaluation',
-            category: 'Procedure',
+            description: 'Unconfigured Clinical Consultation',
+            category: 'Consultation',
             quantity: 1,
             unitPrice: null, // UNCONFIGURED - not assumed free
             total: 0
@@ -871,7 +867,7 @@ async function runTests() {
       const forbiddenRes = await call({
         name: `${role} is forbidden from configuring tariff rates (SUPER_ADMIN exclusive)`,
         method: 'PATCH',
-        path: '/tariffs/trf-bed-gen/rate',
+        path: '/tariffs/TEST-UNAUTH-TARIFF/rate',
         token: tokens[role],
         body: { rate: 1000 },
         expectedStatus: 403
@@ -1024,25 +1020,25 @@ async function runTests() {
         expectedStatus: 200
       });
 
-      // 10.14 SUPER_ADMIN establishes bed tariff rate via Rate Master API
+      // 10.14 SUPER_ADMIN establishes therapy tariff rate via Rate Master API
       const configTariffRes = await call({
-        name: 'SUPER_ADMIN configures bed accommodation tariff rate (Rate Master)',
+        name: 'SUPER_ADMIN configures therapy tariff rate (Rate Master)',
         method: 'PATCH',
-        path: '/tariffs/trf-bed-gen/rate',
+        path: '/tariffs/TEST-SV-01/rate',
         token: tokens.SUPER_ADMIN,
-        body: { rate: 1250, isZeroPricePermitted: false, note: 'Executive Committee approved standard bed tariff' },
+        body: { rate: 1250, isZeroPricePermitted: false, note: 'Executive Committee approved standard therapy tariff' },
         expectedStatus: 200
       });
       const configData = await configTariffRes.json();
       assert(
         configTariffRes.status === 200 && configData.data?.rate === 1250,
-        `SUPER_ADMIN successfully establishes approved rate for BED-GEN (Rate: ₹${configData.data?.rate})`,
+        `SUPER_ADMIN successfully establishes approved rate for TEST-SV-01 (Rate: ₹${configData.data?.rate})`,
         `Status: ${configTariffRes.status}`
       );
 
-      // 10.15 ACCOUNTANT generates invoice with newly configured bed rate
+      // 10.15 ACCOUNTANT generates invoice with newly configured therapy rate
       const billConfiguredRes = await call({
-        name: 'ACCOUNTANT generates invoice with established bed tariff rate',
+        name: 'ACCOUNTANT generates invoice with established therapy tariff rate',
         method: 'POST',
         path: '/billing',
         token: tokens.ACCOUNTANT,
@@ -1052,9 +1048,9 @@ async function runTests() {
           mrn: 'MRN-84920',
           items: [
             {
-              serviceCode: 'BED-GEN',
-              description: 'General Ward Accommodation',
-              category: 'Bed/Room',
+              serviceCode: 'TEST-SV-01',
+              description: 'Nasya Intensive Therapy',
+              category: 'Panchakarma Procedure',
               quantity: 3,
               unitPrice: 1250,
               total: 3750
@@ -1077,11 +1073,11 @@ async function runTests() {
         `Calculated: ${invData.data?.totalAmount}`
       );
     } finally {
-      // 10.17 Revert BED-GEN back to unconfigured state (rate: null) so database is NOT contaminated
+      // 10.17 Revert TEST-SV-01 back to unconfigured state (rate: null) so database is NOT contaminated
       const revertTariffRes = await call({
-        name: 'SUPER_ADMIN cleans up and reverts bed tariff rate back to unconfigured (null)',
+        name: 'SUPER_ADMIN cleans up and reverts therapy tariff rate back to unconfigured (null)',
         method: 'PATCH',
-        path: '/tariffs/trf-bed-gen/rate',
+        path: '/tariffs/TEST-SV-01/rate',
         token: tokens.SUPER_ADMIN,
         body: { rate: null, isZeroPricePermitted: false },
         expectedStatus: 200
@@ -1089,7 +1085,7 @@ async function runTests() {
       const revertData = await revertTariffRes.json();
       assert(
         revertTariffRes.status === 200 && revertData.data?.rate === null,
-        'SUPER_ADMIN reverts BED-GEN tariff back to unconfigured state (rate: null)',
+        'SUPER_ADMIN reverts TEST-SV-01 tariff back to unconfigured state (rate: null)',
         `Status: ${revertTariffRes.status}`
       );
 
@@ -1099,19 +1095,13 @@ async function runTests() {
         await prisma.hospitalTariff.deleteMany({ where: { id: createdServiceId } });
       }
 
-      // Verify in DB directly that BED-GEN and PROC-TRIAGE are null
+      // Verify in DB directly that clean state is preserved
       if (isPrismaConnected) {
-        const bedInDb = await prisma.hospitalTariff.findUnique({ where: { serviceCode: 'BED-GEN' } });
-        const triageInDb = await prisma.hospitalTariff.findUnique({ where: { serviceCode: 'PROC-TRIAGE' } });
+        const testInDb = await prisma.hospitalTariff.findUnique({ where: { serviceCode: 'TEST-SV-01' } });
         assert(
-          bedInDb?.rate === null && bedInDb?.isZeroPricePermitted === false,
-          'Database verification: BED-GEN persists strictly as rate: null in PostgreSQL',
-          `DB Rate: ${bedInDb?.rate}`
-        );
-        assert(
-          triageInDb?.rate === null && triageInDb?.isZeroPricePermitted === false,
-          'Database verification: PROC-TRIAGE persists strictly as rate: null in PostgreSQL',
-          `DB Rate: ${triageInDb?.rate}`
+          testInDb === null,
+          'Database verification: TEST-SV-01 cleanly removed after verification',
+          `DB: ${testInDb}`
         );
       }
     }

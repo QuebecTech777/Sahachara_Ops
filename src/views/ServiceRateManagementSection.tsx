@@ -37,8 +37,6 @@ const CATEGORY_OPTIONS = [
   'Panchakarma',
   'Laboratory Investigation',
   'Procedure',
-  'Bed Charges',
-  'Accommodation',
   'Other Hospital Services'
 ];
 
@@ -52,7 +50,6 @@ const DEPARTMENT_OPTIONS = [
   'Prasuti & Stri Roga',
   'Swasthavritta',
   'Diagnostic Pathology',
-  'Hospital Inpatient / Ward',
   'Emergency & Triage'
 ];
 
@@ -60,7 +57,6 @@ const SERVICE_TYPE_OPTIONS = [
   'Clinical Consultation',
   'Therapeutic Procedure',
   'Diagnostic Investigation',
-  'Inpatient Accommodation',
   'Emergency Triage',
   'Nursing & Ancillary'
 ];

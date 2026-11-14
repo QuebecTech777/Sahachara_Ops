@@ -108,7 +108,7 @@ async function run() {
   if (anyConfiguredProdTariff) {
     fail('SECTION 4 — Production tariffs all NULL', 'Some production tariffs have a configured rate — this violates the unconfigured-rates policy');
   } else {
-    pass('SECTION 4 — All 10 production tariffs remain NULL (unconfigured)');
+    pass('SECTION 4 — All production tariffs remain strictly NULL (unconfigured)');
   }
   const prodMedWithPrice = await prodPrisma.$queryRaw<{ count: bigint }[]>`
     SELECT COUNT(*) as count FROM medication_stock WHERE "unitPrice" IS NOT NULL

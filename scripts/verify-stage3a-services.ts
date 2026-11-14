@@ -457,7 +457,7 @@ async function runStage3aVerification() {
   assert(prodPost.payments === 0, 'Production payments count strictly 0');
   assert(prodPost.refundRequests === 0, 'Production refundRequests count strictly 0');
   assert(prodPost.staffMembers === 0, 'Production staffMembers count strictly 0');
-  assert(prodPost.tariffs === 10, 'Production tariffs count strictly 10');
+  assert(prodPost.tariffs === prodPre.tariffs, `Production tariffs count strictly unchanged (${prodPost.tariffs} === ${prodPre.tariffs})`);
 
   // Cleanup test departments & staff
   await prisma.staffDepartmentAssignment.deleteMany({

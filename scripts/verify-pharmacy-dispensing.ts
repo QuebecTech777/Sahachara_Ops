@@ -1265,7 +1265,7 @@ async function run() {
       assert(prodFinalState.dispensingRecords === 0, 'Production dispensingRecords count strictly 0');
       assert(prodFinalState.stockMovements === 0, 'Production stockMovements count strictly 0');
       assert(prodFinalState.invoices === 0, 'Production invoices count strictly 0');
-      assert(prodFinalState.tariffs === 10, 'Production tariffs count strictly 10');
+      assert(prodFinalState.tariffs === prodInitialState.tariffs, `Production tariffs count strictly unchanged (${prodFinalState.tariffs} === ${prodInitialState.tariffs})`);
 
       // Verify all production tariffs remain null
       const prodTariffs = await prodProbePrisma.hospitalTariff.findMany();

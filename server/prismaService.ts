@@ -78,7 +78,6 @@ import {
   PanchakarmaPhaseTransition as DomainPanchakarmaPhaseTransition,
   StaffTherapyAuthorization as DomainStaffTherapyAuthorization
 } from '../src/types/hospital.ts';
-import { INITIAL_TARIFFS } from '../src/data/seedData.ts';
 import { generateSessionToken, isValidUserRole, registerActiveUserChecker } from './rbacMiddleware.ts';
 
 // Initialize Prisma client with graceful connection handling
@@ -266,7 +265,14 @@ export interface AuthResponse {
 let seedPromise: Promise<void> | null = null;
 
 export async function ensureDefaultDatabaseUsers() {
-  if (!isPrismaConnected) return;
+  if (!isPrismaConnected) {
+    if (checkPrismaPromise) {
+      await checkPrismaPromise;
+    } else {
+      await checkPrismaConnection();
+    }
+    if (!isPrismaConnected) return;
+  }
   if (seedPromise) return seedPromise;
 
   seedPromise = (async () => {
@@ -318,9 +324,6 @@ export async function ensureDefaultDatabaseUsers() {
         });
         console.log(`[Prisma Bootstrap] Initial SUPER_ADMIN account (${finalEmail}) bootstrapped securely.`);
       }
-
-      // 2. Ensure default hospital tariffs (with null rates for unconfigured beds/triage)
-      await ensureDefaultTariffs();
 
       // In production environments, never seed fictitious operational accounts or demo staff.
       // Real staff members must be explicitly provisioned by authorized administrators.
@@ -653,10 +656,7 @@ export async function ensureDefaultDatabaseUsers() {
       }
     });
 
-    // Seed default hospital tariffs
-    await ensureDefaultTariffs();
-
-    console.log('[Prisma Seed] Default 7 RBAC staff accounts and tariffs verified successfully in PostgreSQL.');
+    console.log('[Prisma Seed] Default 7 RBAC staff accounts verified successfully in PostgreSQL (Tariff catalogue initially empty).');
   } catch (err) {
     console.warn('[Prisma Seed] Seed user verification notice:', err);
   }
@@ -666,31 +666,12 @@ export async function ensureDefaultDatabaseUsers() {
 }
 
 /**
- * Seed default hospital tariffs into PostgreSQL
+ * Hospital tariffs automatic seeding has been removed per approved ambulatory outpatient operating model.
+ * The production tariff catalogue initially remains empty.
+ * SUPER_ADMIN creates approved services and configures rates through Settings -> Services and Rates.
  */
-export async function ensureDefaultTariffs() {
-  if (!isPrismaConnected) return;
-  try {
-    for (const tariff of INITIAL_TARIFFS) {
-      await prisma.hospitalTariff.upsert({
-        where: { serviceCode: tariff.serviceCode },
-        update: {},
-        create: {
-          id: tariff.id,
-          category: tariff.category,
-          serviceCode: tariff.serviceCode,
-          serviceName: tariff.serviceName,
-          rate: tariff.rate,
-          isZeroPricePermitted: tariff.isZeroPricePermitted,
-          unit: tariff.unit,
-          description: tariff.description,
-          updatedBy: tariff.updatedBy
-        }
-      });
-    }
-  } catch (err) {
-    console.warn('[Prisma Seed] Tariff seed notice:', err);
-  }
+export async function ensureDefaultTariffs(): Promise<void> {
+  return;
 }
 
 /**
