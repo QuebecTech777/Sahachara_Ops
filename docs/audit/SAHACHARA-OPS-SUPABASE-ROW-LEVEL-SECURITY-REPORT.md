@@ -199,6 +199,10 @@ DROP POLICY IF EXISTS <defective_policy_name> ON public.<affected_table>;
 
 -- 3. Replace with the corrected policy (scoped to service_role / application role)
 -- Example: CREATE POLICY <corrected_policy> ON public.<affected_table> FOR ALL TO service_role USING (true) WITH CHECK (true);
+-- NOTE: In Supabase PostgreSQL, `service_role` has `rolbypassrls = true` in pg_roles.
+-- Consequently, an example RLS policy defined for `service_role` does not constrain a BYPASSRLS role;
+-- RLS policies only constrain non-bypass roles. Any mutation restriction on a BYPASSRLS role
+-- must be enforced via table-level privilege grants (e.g. REVOKE UPDATE, DELETE), not RLS policies.
 
 -- 4. In extreme emergencies requiring temporary RLS relaxation on <affected_table> ONLY:
 -- ALTER TABLE public.<affected_table> DISABLE ROW LEVEL SECURITY;
