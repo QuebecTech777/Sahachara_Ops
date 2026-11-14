@@ -343,31 +343,7 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
                   </div>
                 </div>
 
-                {/* 2. Direct Primary Logout Button right when clicking the name */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsProfileOpen(false);
-                    if (onSignOut) {
-                      onSignOut();
-                    } else {
-                      onNavigate('login');
-                    }
-                  }}
-                  className="w-full h-10 px-3 bg-[#da1e28] hover:bg-[#ba1b23] active:bg-[#750e13] text-white text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer rounded-none shadow-sm mb-3 group"
-                  title="Sign Out of Session Immediately"
-                  aria-label="Log Out"
-                >
-                  <div className="flex items-center gap-2">
-                    <LogOut className="w-4 h-4 text-white shrink-0" />
-                    <span className="font-semibold tracking-[0.16px]">Log Out</span>
-                  </div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-white/90 bg-black/20 px-1.5 py-0.5 border border-white/20">
-                    Exit
-                  </span>
-                </button>
-
-                {/* 2.5 Theme Switcher in Profile Menu */}
+                {/* 2. Theme Switcher in Profile Menu */}
                 <div className="p-2 bg-[#262626] border border-[#393939] mb-2.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {theme === 'g100' ? (
@@ -465,24 +441,6 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
               </div>
             )}
           </div>
-
-          {/* 9. Standalone Top Right Log Out Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (onSignOut) {
-                onSignOut();
-              } else {
-                onNavigate('login');
-              }
-            }}
-            className="h-12 px-2.5 sm:px-3 flex items-center gap-1.5 text-[#ff8389] hover:text-white hover:bg-[#da1e28] transition-colors focus:outline-none focus:ring-1 focus:ring-white cursor-pointer border-l border-[#393939] group"
-            title="Log Out of Session"
-            aria-label="Log Out"
-          >
-            <LogOut className="w-4 h-4 shrink-0 text-[#ff8389] group-hover:text-white" />
-            <span className="hidden sm:inline text-xs font-semibold tracking-[0.16px]">Log Out</span>
-          </button>
         </div>
       </header>
     </>
