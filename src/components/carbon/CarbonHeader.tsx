@@ -465,6 +465,24 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
               </div>
             )}
           </div>
+
+          {/* 9. Standalone Top Right Log Out Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onSignOut) {
+                onSignOut();
+              } else {
+                onNavigate('login');
+              }
+            }}
+            className="h-12 px-2.5 sm:px-3 flex items-center gap-1.5 text-[#ff8389] hover:text-white hover:bg-[#da1e28] transition-colors focus:outline-none focus:ring-1 focus:ring-white cursor-pointer border-l border-[#393939] group"
+            title="Log Out of Session"
+            aria-label="Log Out"
+          >
+            <LogOut className="w-4 h-4 shrink-0 text-[#ff8389] group-hover:text-white" />
+            <span className="hidden sm:inline text-xs font-semibold tracking-[0.16px]">Log Out</span>
+          </button>
         </div>
       </header>
     </>
