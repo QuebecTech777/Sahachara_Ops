@@ -129,7 +129,7 @@ const hospitalFetch = async (input: RequestInfo | URL, init?: RequestInit): Prom
       if (token && !headers.has('Authorization')) {
         headers.set('Authorization', `Bearer ${token}`);
       }
-    } catch {}
+    } catch { }
   }
   return nativeFetch(url, { ...init, headers });
 };
@@ -159,7 +159,7 @@ class HospitalApiClient {
   private currentUserId: string = loadOr('current_user_id', '');
 
   constructor() {
-    this.init().catch(() => {});
+    this.init().catch(() => { });
   }
 
   async init(): Promise<void> {
@@ -487,7 +487,7 @@ class HospitalApiClient {
           return json.data;
         }
       }
-    } catch {}
+    } catch { }
     return this.localTariffs;
   }
 
@@ -500,7 +500,7 @@ class HospitalApiClient {
           return json.data;
         }
       }
-    } catch {}
+    } catch { }
     return this.localTariffs.find((t) => t.id === id || t.serviceCode === id) || null;
   }
 
@@ -1534,72 +1534,28 @@ class HospitalApiClient {
   }
 
   async createStaff(data: Partial<StaffMember>): Promise<StaffMember> {
-    const currentUser = this.getCurrentUser();
-    try {
-      const res = await fetch('/api/staff', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.getAuthHeaders()
-        },
-        body: JSON.stringify(data)
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success) {
-          const created = { ...json.data, activationPin: json.activationPin || json.data.activationPin };
-          this.localStaff.unshift(created);
-          save('staff', this.localStaff);
-          notifyListeners();
-          return created;
-        }
-      } else {
-        const errJson = await res.json().catch(() => null);
-        if (errJson && errJson.message) {
-          throw new Error(errJson.message);
-        }
-        throw new Error(`Failed to create staff member: HTTP ${res.status}`);
-      }
-    } catch (err: any) {
-      if (err.message && !err.message.includes('fetch')) {
-        throw err;
-      }
+    const res = await fetch('/api/staff', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(data)
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      const errorMsg = json?.message || json?.error || `Failed to create staff member: HTTP ${res.status}`;
+      throw new Error(errorMsg);
     }
 
-    if (!data.phone || data.phone.trim() === '') {
-      throw new Error('PhoneRequired: Contact telephone number is mandatory.');
-    }
-    const cleanPhone = data.phone.trim();
-    const phoneDigits = cleanPhone.replace(/\D/g, '');
-    const phonePattern = /^\+?[0-9\s\-()]{7,25}$/;
-    if (!phonePattern.test(cleanPhone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
-      throw new Error('InvalidPhone: Contact telephone number must be a valid telephone format (e.g. +91 98450 12345).');
-    }
-
-    const pin = data.activationPin || Math.floor(1000 + Math.random() * 9000).toString();
-    const newStaff: StaffMember = {
-      id: `stf-${Date.now()}`,
-      employeeId: data.employeeId || `STF-2026-${Math.floor(10000 + Math.random() * 90000)}`,
-      name: data.name || 'New Staff Member',
-      role: (data.role as UserRole) || 'DOCTOR',
-      designation: data.designation || 'Ayurvedic Medical Officer',
-      department: data.department || 'Kayachikitsa (Internal Medicine)',
-      email: data.email || `staff.${Date.now()}@sahachara.com`,
-      phone: cleanPhone,
-      licenseNumber: data.licenseNumber || null,
-      status: (data.status as any) || 'pending_activation',
-      activationPin: pin,
-      shift: data.shift || null,
-      qualification: data.qualification || null,
-      joiningDate: data.joiningDate || new Date().toISOString().split('T')[0],
-      notes: data.notes || null
-    };
-
-    this.localStaff.unshift(newStaff);
+    const created = { ...json.data, activationPin: json.activationPin || json.data?.activationPin };
+    const cachedStaff = { ...json.data };
+    delete (cachedStaff as any).activationPin;
+    this.localStaff.unshift(cachedStaff);
     save('staff', this.localStaff);
-    this.addAuditLog(currentUser.name, currentUser.role, 'Onboarded Staff Member', 'Staff Management', `Added ${newStaff.name} as ${newStaff.role} (${newStaff.department})`);
     notifyListeners();
-    return newStaff;
+    return created;
   }
 
   async updateStaff(id: string, updates: Partial<StaffMember>): Promise<StaffMember> {

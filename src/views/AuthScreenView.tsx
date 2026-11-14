@@ -122,8 +122,8 @@ export const AuthScreenView: React.FC<AuthScreenViewProps> = ({
       return;
     }
 
-    if (!newPassword || newPassword.length < 6) {
-      setErrorMessage('Security password must contain at least 6 characters.');
+    if (!newPassword || newPassword.length < 8) {
+      setErrorMessage('Security password must contain at least 8 characters.');
       return;
     }
 
@@ -336,8 +336,8 @@ export const AuthScreenView: React.FC<AuthScreenViewProps> = ({
                     type="text"
                     value={activatePin}
                     onChange={(e) => setActivatePin(e.target.value)}
-                    placeholder="e.g. 7492"
-                    maxLength={6}
+                    placeholder="Enter 4-digit PIN"
+                    maxLength={4}
                     className="w-full bg-transparent border-b border-[#8d8d8d] focus:border-[#0f62fe] text-sm text-[#161616] py-2 px-0 outline-none transition-colors placeholder-[#a8a8a8] rounded-none font-mono tracking-widest"
                     required
                   />

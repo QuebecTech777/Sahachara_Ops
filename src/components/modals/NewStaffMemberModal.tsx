@@ -98,7 +98,6 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
     }
   };
 
-  const [pinNotice, setPinNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,8 +128,6 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
       return;
     }
 
-    const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
-
     const newStaff: Partial<StaffMember> = {
       name: name.trim(),
       role,
@@ -142,7 +139,6 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
       shift,
       qualification: qualification.trim() || undefined,
       status: 'pending_activation',
-      activationPin: generatedPin,
       notes: notes.trim() || undefined,
       joiningDate: new Date().toISOString().split('T')[0]
     };

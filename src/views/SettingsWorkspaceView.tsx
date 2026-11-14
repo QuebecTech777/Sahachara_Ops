@@ -28,7 +28,9 @@ import {
   Award,
   Edit,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Copy,
+  Check
 } from 'lucide-react';
 import { CarbonButton } from '../components/carbon/CarbonButton';
 import { CarbonTag, CarbonTagType } from '../components/carbon/CarbonTag';
@@ -252,7 +254,15 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
   const [setActiveImmediately, setSetActiveImmediately] = useState(true);
   const [isSubmittingStaff, setIsSubmittingStaff] = useState(false);
   const [staffValidationError, setStaffValidationError] = useState<string | null>(null);
-  const [pinDialogStaff, setPinDialogStaff] = useState<StaffMember | null>(null);
+  const [newlyCreatedPinInfo, setNewlyCreatedPinInfo] = useState<{
+    name: string;
+    email: string;
+    employeeId: string;
+    pin: string;
+    isRegenerated?: boolean;
+  } | null>(null);
+  const [isRegeneratingPinId, setIsRegeneratingPinId] = useState<string | null>(null);
+  const [copiedPin, setCopiedPin] = useState(false);
 
   // ----------------------------------------------------
   // 5. Audit Log State & Modal
@@ -1249,13 +1259,37 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
                             {s.joiningDate || '2025-01-15'}
                           </td>
                           <td className="py-2.5 px-3 text-right space-x-1">
-                            <CarbonButton
-                              kind="ghost"
-                              size="sm"
-                              onClick={() => setPinDialogStaff(s)}
-                            >
-                              Regenerate PIN
-                            </CarbonButton>
+                            {s.status === 'pending_activation' && (
+                              <CarbonButton
+                                kind="ghost"
+                                size="sm"
+                                disabled={isRegeneratingPinId === s.id}
+                                onClick={async () => {
+                                  setIsRegeneratingPinId(s.id);
+                                  try {
+                                    const res = await hospitalApi.regenerateStaffPin(s.id);
+                                    setNewlyCreatedPinInfo({
+                                      name: s.name,
+                                      email: s.email,
+                                      employeeId: s.employeeId,
+                                      pin: res.activationPin,
+                                      isRegenerated: true
+                                    });
+                                    if (onNotify) {
+                                      onNotify('Activation PIN Regenerated', `New 4-digit security PIN generated for ${s.name}.`, 'success');
+                                    }
+                                  } catch (err: any) {
+                                    if (onNotify) {
+                                      onNotify('PIN Regeneration Failed', err.message || 'Could not regenerate activation PIN.', 'error');
+                                    }
+                                  } finally {
+                                    setIsRegeneratingPinId(null);
+                                  }
+                                }}
+                              >
+                                {isRegeneratingPinId === s.id ? 'Regenerating...' : 'Regenerate PIN'}
+                              </CarbonButton>
+                            )}
                             <CarbonButton
                               kind="ghost"
                               size="sm"
@@ -2145,15 +2179,25 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
                   newStaffRole === 'VAIDYA' ? 'Kayachikitsa & Panchakarma' :
                   newStaffRole === 'ADMIN' || newStaffRole === 'SUPER_ADMIN' ? 'Hospital Operations Administration' : 'Clinical Directorate';
 
-                await onAddStaff({
+                const created = await onAddStaff({
                   name: newStaffName.trim(),
                   email: cleanEmail,
                   phone: cleanPhone,
                   role: newStaffRole,
-                  status: setActiveImmediately ? 'active' : 'inactive',
+                  status: setActiveImmediately ? 'active' : 'pending_activation',
                   department,
                   designation
                 });
+
+                if (created && (created as any).activationPin) {
+                  setNewlyCreatedPinInfo({
+                    name: created.name,
+                    email: created.email,
+                    employeeId: created.employeeId,
+                    pin: (created as any).activationPin,
+                    isRegenerated: false
+                  });
+                }
               }
               setIsAddStaffModalOpen(false);
               setNewStaffName('');
@@ -2255,30 +2299,68 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
         </CarbonModal>
       )}
 
-      {/* Regenerate PIN Dialog */}
-      {pinDialogStaff && (
+      {/* Newly Created or Regenerated PIN Secure Dialog */}
+      {newlyCreatedPinInfo && (
         <CarbonModal
           isOpen={true}
-          title="Regenerate Activation PIN"
-          subtitle={`Issue a new temporary 4-digit security PIN for ${pinDialogStaff.name}.`}
-          onClose={() => setPinDialogStaff(null)}
-          onRequestSubmit={() => {
-            if (onNotify) {
-              onNotify('Activation PIN Regenerated', `New 4-digit PIN generated and dispatched to ${pinDialogStaff.email}.`, 'success');
-            }
-            setPinDialogStaff(null);
+          title={newlyCreatedPinInfo.isRegenerated ? "Activation PIN Regenerated" : "Staff Member Onboarded — Temporary Security PIN"}
+          subtitle={newlyCreatedPinInfo.isRegenerated ? "A new temporary 4-digit security PIN has been issued." : "A one-time 4-digit security PIN has been generated for account activation."}
+          onClose={() => {
+            setNewlyCreatedPinInfo(null);
+            setCopiedPin(false);
           }}
-          primaryButtonText="Regenerate & Send PIN"
-          secondaryButtonText="Close"
+          onRequestSubmit={() => {
+            setNewlyCreatedPinInfo(null);
+            setCopiedPin(false);
+          }}
+          primaryButtonText="Done & Dismiss"
         >
-          <div className="p-3 bg-[#edf5ff] border border-[#a6c8ff] text-xs space-y-2">
-            <p className="text-[#0043ce] font-medium">Temporary Credential Verification:</p>
-            <div className="p-2 bg-white font-mono text-center text-lg font-bold text-[#161616] tracking-widest border border-[#a6c8ff]">
-              7492
+          <div className="space-y-4 text-xs">
+            <div className="p-4 bg-[#edf5ff] border border-[#a6c8ff] rounded-sm space-y-2">
+              <div className="font-semibold text-sm text-[#0043ce]">
+                {newlyCreatedPinInfo.name} ({newlyCreatedPinInfo.employeeId})
+              </div>
+              <div className="text-[11px] text-[#525252]">
+                Registered Official Email: <span className="font-mono font-semibold">{newlyCreatedPinInfo.email}</span>
+              </div>
+              <div className="pt-2 text-center">
+                <div className="text-[11px] text-[#525252] uppercase font-mono tracking-wider mb-1">
+                  {newlyCreatedPinInfo.isRegenerated ? 'New 4-Digit Security Activation PIN:' : 'One-Time Activation Security PIN:'}
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <div className="p-3 bg-white border border-[#a6c8ff] font-mono text-2xl font-bold tracking-widest text-[#0f62fe] inline-block px-8 rounded shadow-sm">
+                    {newlyCreatedPinInfo.pin}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator?.clipboard?.writeText) {
+                        navigator.clipboard.writeText(newlyCreatedPinInfo.pin);
+                        setCopiedPin(true);
+                        setTimeout(() => setCopiedPin(false), 2000);
+                      }
+                    }}
+                    className="p-2.5 bg-white hover:bg-[#edf5ff] border border-[#a6c8ff] text-[#0f62fe] transition-colors rounded cursor-pointer flex items-center gap-1.5 font-medium text-xs shadow-sm"
+                    title="Copy PIN to clipboard"
+                  >
+                    {copiedPin ? (
+                      <>
+                        <Check className="w-4 h-4 text-[#24a148]" />
+                        <span className="text-[#24a148] font-semibold text-[11px]">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 text-[#0f62fe]" />
+                        <span className="text-[11px]">Copy PIN</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="text-[11px] text-[#525252] pt-2">
+                <strong>Security Notice:</strong> This PIN is confidential, single-use, and valid for 24 hours. It is stored only as a cryptographic hash in the database. Convey this PIN to the staff member so they can set their password via &quot;Activate Staff Account&quot; at <code>/activate</code>.
+              </p>
             </div>
-            <p className="text-[11px] text-[#525252]">
-              PIN will expire in 24 hours. The staff member can use this to activate their account at <code>/activate</code>.
-            </p>
           </div>
         </CarbonModal>
       )}

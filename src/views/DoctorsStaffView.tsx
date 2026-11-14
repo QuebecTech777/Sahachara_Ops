@@ -22,7 +22,9 @@ import {
   Lock,
   UserCheck,
   AlertTriangle,
-  Building2
+  Building2,
+  Copy,
+  Check
 } from 'lucide-react';
 import { CarbonDataTable, Column } from '../components/carbon/CarbonDataTable';
 import { CarbonTag, CarbonTagType } from '../components/carbon/CarbonTag';
@@ -69,6 +71,7 @@ export const DoctorsStaffView: React.FC<DoctorsStaffViewProps> = ({
   const [staffAuditLogs, setStaffAuditLogs] = useState<ClinicalAuditLog[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [newlyCreatedPinInfo, setNewlyCreatedPinInfo] = useState<{ name: string; email: string; pin: string; employeeId: string } | null>(null);
+  const [copiedPin, setCopiedPin] = useState(false);
 
   // Phase 6B: Department Assignments State
   const [managingDeptStaff, setManagingDeptStaff] = useState<StaffMember | null>(null);
@@ -798,8 +801,14 @@ export const DoctorsStaffView: React.FC<DoctorsStaffViewProps> = ({
           isOpen={true}
           title="Staff Member Onboarded — Temporary Security PIN"
           subtitle="A one-time 4-digit security PIN has been generated for account activation."
-          onClose={() => setNewlyCreatedPinInfo(null)}
-          onRequestSubmit={() => setNewlyCreatedPinInfo(null)}
+          onClose={() => {
+            setNewlyCreatedPinInfo(null);
+            setCopiedPin(false);
+          }}
+          onRequestSubmit={() => {
+            setNewlyCreatedPinInfo(null);
+            setCopiedPin(false);
+          }}
           primaryButtonText="Done & Dismiss"
         >
           <div className="space-y-4 text-xs">
@@ -812,8 +821,34 @@ export const DoctorsStaffView: React.FC<DoctorsStaffViewProps> = ({
               </div>
               <div className="pt-2 text-center">
                 <div className="text-[11px] text-[#525252] uppercase font-mono tracking-wider mb-1">One-Time Activation Security PIN:</div>
-                <div className="p-3 bg-white border border-[#a6c8ff] font-mono text-2xl font-bold tracking-widest text-[#0f62fe] inline-block px-8 rounded">
-                  {newlyCreatedPinInfo.pin}
+                <div className="flex items-center justify-center gap-2">
+                  <div className="p-3 bg-white border border-[#a6c8ff] font-mono text-2xl font-bold tracking-widest text-[#0f62fe] inline-block px-8 rounded shadow-sm">
+                    {newlyCreatedPinInfo.pin}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator?.clipboard?.writeText) {
+                        navigator.clipboard.writeText(newlyCreatedPinInfo.pin);
+                        setCopiedPin(true);
+                        setTimeout(() => setCopiedPin(false), 2000);
+                      }
+                    }}
+                    className="p-2.5 bg-white hover:bg-[#edf5ff] border border-[#a6c8ff] text-[#0f62fe] transition-colors rounded cursor-pointer flex items-center gap-1.5 font-medium text-xs shadow-sm"
+                    title="Copy PIN to clipboard"
+                  >
+                    {copiedPin ? (
+                      <>
+                        <Check className="w-4 h-4 text-[#24a148]" />
+                        <span className="text-[#24a148] font-semibold text-[11px]">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 text-[#0f62fe]" />
+                        <span className="text-[11px]">Copy PIN</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
               <p className="text-[11px] text-[#525252] pt-2">

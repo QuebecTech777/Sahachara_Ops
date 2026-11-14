@@ -6731,6 +6731,12 @@ export async function dbGetStaffById(id: string): Promise<StaffMember | null> {
   return match || null;
 }
 
+export function generateSecureActivationPin(): string {
+  // Cryptographically secure 4-digit PIN between 0000 and 9999 preserving leading zeros
+  const pinNum = crypto.randomInt(0, 10000);
+  return pinNum.toString().padStart(4, '0');
+}
+
 export async function dbCreateStaffMember(
   data: {
     name: string;
@@ -6795,10 +6801,8 @@ export async function dbCreateStaffMember(
   // Generate sequence-backed employee ID
   const employeeId = await generateUniqueStaffId();
 
-  // Generate 4-digit PIN
-  const pin = data.activationPin && /^\d{4}$/.test(data.activationPin)
-    ? data.activationPin
-    : String(crypto.randomInt(1000, 10000));
+  // Generate cryptographically secure random 4-digit PIN (0000-9999, never from client or Math.random)
+  const pin = generateSecureActivationPin();
   const pinHash = bcrypt.hashSync(pin, 10);
   const pinExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -6916,7 +6920,7 @@ export async function dbCreateStaffMember(
     reportingTo: data.reportingTo || null,
     discipline: data.discipline || null,
     specialty: data.specialty || null,
-    activationPin: pin,
+    activationPin: null,
     activationPinHash: pinHash,
     pinExpiresAt: pinExpiresAt.toISOString(),
     pinAttempts: 0,
@@ -7376,7 +7380,10 @@ export async function dbRegenerateActivationPin(
     throw new Error('SUPER_ADMIN_MUTATION_FORBIDDEN: Operational Administrators cannot alter SUPER_ADMIN accounts.');
   }
 
-  const newPin = String(crypto.randomInt(1000, 10000));
+  let newPin = generateSecureActivationPin();
+  if (staff.activationPinHash && bcrypt.compareSync(newPin, staff.activationPinHash)) {
+    newPin = generateSecureActivationPin();
+  }
   const pinHash = bcrypt.hashSync(newPin, 10);
   const pinExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -7401,7 +7408,17 @@ export async function dbRegenerateActivationPin(
             pinExpiresAt,
             pinAttempts: 0
           }
-        });
+        }).catch(() => {});
+      } else {
+        await tx.user.updateMany({
+          where: { email: staff.email.toLowerCase().trim() },
+          data: {
+            activationPin: null,
+            activationPinHash: pinHash,
+            pinExpiresAt,
+            pinAttempts: 0
+          }
+        }).catch(() => {});
       }
     });
 
@@ -7415,15 +7432,19 @@ export async function dbRegenerateActivationPin(
 
     const storeIdx = hospitalStore.staff.findIndex((m) => m.id === staff.id);
     if (storeIdx !== -1) {
-      hospitalStore.staff[storeIdx].activationPin = newPin;
+      hospitalStore.staff[storeIdx].activationPin = null;
+      hospitalStore.staff[storeIdx].activationPinHash = pinHash;
       hospitalStore.staff[storeIdx].pinExpiresAt = pinExpiresAt.toISOString();
+      hospitalStore.staff[storeIdx].pinAttempts = 0;
     }
 
     return { success: true, activationPin: newPin };
   }
 
-  staff.activationPin = newPin;
+  staff.activationPin = null;
+  staff.activationPinHash = pinHash;
   staff.pinExpiresAt = pinExpiresAt.toISOString();
+  staff.pinAttempts = 0;
   return { success: true, activationPin: newPin };
 }
 
