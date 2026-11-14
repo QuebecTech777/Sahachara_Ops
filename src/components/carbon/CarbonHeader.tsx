@@ -91,7 +91,7 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
 
   return (
     <>
-      <header className="carbon-header-bar fixed top-0 left-0 right-0 z-50 h-12 bg-[#161616] border-b border-[#393939] text-white flex items-center justify-between px-0 select-none w-full max-w-full overflow-hidden">
+      <header className="carbon-header-bar fixed top-0 left-0 right-0 z-50 h-12 bg-[#161616] border-b border-[#393939] text-white flex items-center justify-between px-0 select-none w-full max-w-full">
         {/* 1. Skip-to-content control (Accessibility standard) */}
         <a
           href="#main-content"
@@ -326,7 +326,7 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
 
             {isProfileOpen && (
               <div
-                className="absolute right-0 top-12 w-72 sm:w-80 max-w-[calc(100vw-16px)] bg-[#161616] border border-[#393939] shadow-2xl text-white p-3 z-50 animate-in fade-in duration-100"
+                className="absolute right-0 top-12 w-72 sm:w-80 max-w-[calc(100vw-16px)] max-h-[calc(100vh-60px)] overflow-y-auto bg-[#161616] border border-[#393939] shadow-2xl text-white p-3 z-50 animate-in fade-in duration-100"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* 1. Profile Identity Header */}
@@ -342,6 +342,30 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
                     Session: <span className="text-[#24a148] font-mono">Authenticated (HIPAA Active)</span>
                   </div>
                 </div>
+
+                {/* 2. Direct Primary Logout Button right when clicking profile */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    if (onSignOut) {
+                      onSignOut();
+                    } else {
+                      onNavigate('login');
+                    }
+                  }}
+                  className="w-full h-10 px-3 bg-[#da1e28] hover:bg-[#ba1b23] active:bg-[#750e13] text-white text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer rounded-none shadow-sm mb-2.5 group"
+                  title="Sign Out of Session Immediately"
+                  aria-label="Log Out"
+                >
+                  <div className="flex items-center gap-2">
+                    <LogOut className="w-4 h-4 text-white shrink-0" />
+                    <span className="font-semibold tracking-[0.16px]">Log Out</span>
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-white/90 bg-black/20 px-1.5 py-0.5 border border-white/20">
+                    Sign Out
+                  </span>
+                </button>
 
                 {/* 2. Theme Switcher in Profile Menu */}
                 <div className="p-2 bg-[#262626] border border-[#393939] mb-2.5 flex items-center justify-between">
