@@ -300,8 +300,8 @@ export async function ensureDefaultDatabaseUsers() {
           }
         }
 
-        const finalEmail = (configuredEmail || 'alexander.wright@sahachara.com').toLowerCase();
-        const finalName = configuredName || 'Alexander Wright';
+        const finalEmail = (configuredEmail || 'systems@sahachara.com').toLowerCase();
+        const finalName = configuredName || 'Sahachara Systems';
         const finalPassword = configuredPassword || 'Secure@HospitalSuperAdmin2026!#';
         const superAdminHash = bcrypt.hashSync(finalPassword, 12);
 
@@ -607,7 +607,7 @@ export async function ensureDefaultDatabaseUsers() {
       create: {
         id: 'sa-user-001',
         email: 'superadmin@sahachara.com',
-        name: 'Dr. Alexander Wright',
+        name: 'Sahachara Systems',
         role: 'SUPER_ADMIN',
         passwordHash: adminHash,
         status: 'active',

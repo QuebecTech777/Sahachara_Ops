@@ -155,9 +155,9 @@ export const AuthScreenView: React.FC<AuthScreenViewProps> = ({
   const quickPersonas = [
     {
       id: 'usr-superadmin',
-      name: 'Alexander Wright',
+      name: 'Sahachara Systems',
       role: 'SUPER_ADMIN',
-      email: 'alexander.wright@sahachara.com',
+      email: 'systems@sahachara.com',
       icon: Shield
     },
     {

@@ -1183,7 +1183,7 @@ export const INITIAL_AUDIT_LOGS: ClinicalAuditLog[] = [
   {
     id: 'log-03',
     timestamp: '2026-10-22T21:00:00Z',
-    actor: 'Alexander Wright',
+    actor: 'Sahachara Systems',
     role: 'SUPER_ADMIN',
     action: 'Verified HIPAA Security Audit Trail',
     category: 'RBAC Change',
@@ -1192,7 +1192,7 @@ export const INITIAL_AUDIT_LOGS: ClinicalAuditLog[] = [
   {
     id: 'log-04',
     timestamp: '2026-10-22T19:45:00Z',
-    actor: 'Alexander Wright',
+    actor: 'Sahachara Systems',
     role: 'SUPER_ADMIN',
     action: 'Assigned Inpatient Bed',
     category: 'Bed Transfer',
@@ -1204,12 +1204,12 @@ export const INITIAL_AUDIT_LOGS: ClinicalAuditLog[] = [
 export const INITIAL_USERS: AppUser[] = [
   {
     id: 'usr-superadmin',
-    name: 'Alexander Wright',
+    name: 'Sahachara Systems',
     role: 'SUPER_ADMIN',
     title: 'Chief Executive & Super Administrator',
-    email: 'alexander.wright@sahachara.com',
+    email: 'systems@sahachara.com',
     department: 'Executive Governance & Technology',
-    avatarInitials: 'AW',
+    avatarInitials: 'SS',
     status: 'active'
   },
   {

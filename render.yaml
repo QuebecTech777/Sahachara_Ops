@@ -16,9 +16,9 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: INITIAL_SUPER_ADMIN_EMAIL
-        sync: false
+        value: systems@sahachara.com
       - key: INITIAL_SUPER_ADMIN_NAME
-        sync: false
+        value: Sahachara Systems
       - key: INITIAL_SUPER_ADMIN_PASSWORD
         sync: false
       - key: SUPABASE_URL
