@@ -206,12 +206,13 @@ DROP POLICY IF EXISTS <defective_policy_name> ON public.<affected_table>;
 
 -- 4. In extreme emergencies requiring temporary RLS relaxation on <affected_table> ONLY:
 -- ALTER TABLE public.<affected_table> DISABLE ROW LEVEL SECURITY;
--- SECURITY PROOF: Because REVOKE ALL ON TABLE public.<affected_table> FROM anon, authenticated
+-- SECURITY PROOF: Because REVOKE ALL ON TABLE public.<affected_table> FROM PUBLIC, anon, authenticated
 -- remains permanently in effect, SQL privilege checks fail closed at the grant level (42501).
--- Neither anon nor authenticated can read or write the table.
+-- Neither PUBLIC, anon, nor authenticated can read or write the table.
 
--- 5. Confirm that anon and authenticated remain completely denied (Zero public grants)
-REVOKE ALL ON TABLE public.<affected_table> FROM anon, authenticated;
+-- 5. Confirm that public, anon, and authenticated remain completely denied (preserving the original migration's public, anon, and authenticated privilege restrictions):
+REVOKE ALL ON TABLE public.<affected_table>
+FROM PUBLIC, anon, authenticated;
 
 COMMIT;
 ```
