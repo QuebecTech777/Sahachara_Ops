@@ -22,6 +22,7 @@ import crypto from 'crypto';
 import { hospitalStore } from './dataStore.ts';
 import {
   Patient,
+  HospitalOverviewMetrics,
   Appointment,
   Consultation,
   TreatmentPlan,
@@ -3595,7 +3596,7 @@ export async function dbCreatePrescription(prescription: Prescription): Promise<
           encounterId: prescription.encounterId || null,
           patientId: prescription.patientId,
           patientName: prescription.patientName || 'Walk-in Patient',
-          mrn: prescription.mrn || 'MRN-84920',
+          mrn: prescription.mrn || '',
           doctorId: prescription.doctorId,
           doctorName: prescription.doctorName,
           prescribingPractitionerRole: prescription.prescribingPractitionerRole || 'DOCTOR',
@@ -6277,7 +6278,7 @@ export async function dbUpdateLabOrder(labOrder: LabOrder): Promise<LabOrder> {
           orderNumber: labOrder.orderNumber || `LAB-${Date.now()}`,
           patientId: labOrder.patientId,
           patientName: labOrder.patientName || 'Patient',
-          mrn: labOrder.mrn || 'MRN-84920',
+          mrn: labOrder.mrn || '',
           testType: labOrder.testType || 'Laboratory Panel',
           priority: labOrder.priority || 'Routine',
           orderingDoctor: labOrder.orderingDoctor || 'Attending Physician',
@@ -11798,6 +11799,105 @@ export async function dbGetPrimaryStaffAssignment(
       department: true
     }
   });
+}
+
+/**
+ * Retrieve authentic database-backed hospital overview metrics.
+ * Strictly outpatient: returns zero for unpopulated metrics and contains NO inpatient beds or wards.
+ */
+export async function dbGetOverviewMetrics(): Promise<HospitalOverviewMetrics> {
+  const zeroMetrics: HospitalOverviewMetrics = {
+    totalPatientsToday: 0,
+    activeConsultationsToday: 0,
+    scheduledAppointmentsToday: 0,
+    activeTreatments: 0,
+    activePanchakarmaCourses: 0,
+    activeDoctorsOnDuty: 0,
+    criticalLabAlerts: 0,
+    pendingPrescriptions: 0,
+    todayRevenueInr: 0,
+    erWaitTimeMinutes: 0,
+    occupiedBeds: 0,
+    totalBeds: 0,
+    occupancyRate: 0,
+    admittedToday: 0,
+    dischargedToday: 0
+  };
+
+  if (!isPrismaConnected) {
+    return zeroMetrics;
+  }
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  try {
+    const [
+      totalPatients,
+      scheduledApts,
+      consultationsToday,
+      activeTreatments,
+      activePanchakarma,
+      doctorsOnDuty,
+      criticalLabs,
+      pendingRx,
+      revenueResult
+    ] = await Promise.all([
+      prisma.patient.count({ where: { deletedAt: null } }),
+      prisma.appointment.count({
+        where: {
+          dateTime: { gte: startOfDay, lte: endOfDay },
+          status: 'scheduled'
+        }
+      }),
+      prisma.consultation.count({
+        where: {
+          dateTime: { gte: startOfDay, lte: endOfDay }
+        }
+      }),
+      prisma.treatmentPlan.count({ where: { status: 'active' } }),
+      prisma.panchakarmaCourse.count({ where: { status: 'Active' } }),
+      prisma.staffMember.count({
+        where: {
+          role: { in: ['DOCTOR', 'VAIDYA'] },
+          status: 'on_duty'
+        }
+      }),
+      prisma.labOrder.count({ where: { isAbnormal: true } }),
+      prisma.prescription.count({ where: { status: 'pending' } }),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: {
+          createdAt: { gte: startOfDay, lte: endOfDay }
+        }
+      })
+    ]);
+
+    const todayRevenueInr = revenueResult._sum.amount ? Number(revenueResult._sum.amount) : 0;
+
+    return {
+      totalPatientsToday: totalPatients,
+      activeConsultationsToday: consultationsToday,
+      scheduledAppointmentsToday: scheduledApts,
+      activeTreatments,
+      activePanchakarmaCourses: activePanchakarma,
+      activeDoctorsOnDuty: doctorsOnDuty,
+      criticalLabAlerts: criticalLabs,
+      pendingPrescriptions: pendingRx,
+      todayRevenueInr,
+      erWaitTimeMinutes: 0,
+      occupiedBeds: 0,
+      totalBeds: 0,
+      occupancyRate: 0,
+      admittedToday: 0,
+      dischargedToday: 0
+    };
+  } catch (error) {
+    console.error('[dbGetOverviewMetrics] Error calculating metrics:', error);
+    return zeroMetrics;
+  }
 }
 
 // Re-export Phase 7 Ayurvedic Therapy & Panchakarma Services

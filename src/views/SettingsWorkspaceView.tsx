@@ -553,13 +553,13 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="p-4 bg-[#f4f4f4] border border-[#e0e0e0]">
                   <span className="text-[11px] font-mono uppercase text-[#525252] block">Total Registered Staff</span>
-                  <div className="text-2xl font-mono text-[#161616] font-semibold mt-1">{staff.length || 18}</div>
+                  <div className="text-2xl font-mono text-[#161616] font-semibold mt-1">{staff.length}</div>
                   <span className="text-[11px] text-[#24a148] mt-1 block">Active Clinical Licenses</span>
                 </div>
                 <div className="p-4 bg-[#f4f4f4] border border-[#e0e0e0]">
                   <span className="text-[11px] font-mono uppercase text-[#525252] block">On-Duty Physicians</span>
                   <div className="text-2xl font-mono text-[#161616] font-semibold mt-1">
-                    {staff.filter((s) => s.status === 'on_duty').length || 6}
+                    {staff.filter((s) => s.status === 'on_duty').length}
                   </div>
                   <span className="text-[11px] text-[#0f62fe] mt-1 block">Conducting Consultations</span>
                 </div>

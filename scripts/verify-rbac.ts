@@ -491,6 +491,34 @@ async function runTests() {
     });
     assert(vaidyaBillRes.status === 403, 'VAIDYA cannot generate billing invoice (403 Forbidden)', `Status: ${vaidyaBillRes.status}`);
 
+    // Provision isolated test lab order fixtures for verification testing
+    hospitalStore.labOrders.push(
+      {
+        id: 'lab-301',
+        orderNumber: 'LAB-2026-TEST01',
+        patientId: 'pat-test',
+        patientName: 'Test Patient',
+        mrn: 'MRN-TEST-001',
+        testType: 'Cardiac Troponin I',
+        priority: 'STAT (Immediate)',
+        orderingDoctor: 'Dr. Test Physician',
+        orderedAt: new Date().toISOString(),
+        status: 'ordered'
+      },
+      {
+        id: 'lab-302',
+        orderNumber: 'LAB-2026-TEST02',
+        patientId: 'pat-test',
+        patientName: 'Test Patient',
+        mrn: 'MRN-TEST-001',
+        testType: 'Comprehensive Metabolic Panel',
+        priority: 'Routine',
+        orderingDoctor: 'Vaidya Test Practitioner',
+        orderedAt: new Date().toISOString(),
+        status: 'ordered'
+      }
+    );
+
     // 4.11 DOCTOR can review and verify laboratory results with standard clinical attribution
     const docLabReviewRes = await call({
       name: 'DOCTOR can review and verify diagnostic lab results',

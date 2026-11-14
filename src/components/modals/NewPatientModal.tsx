@@ -30,8 +30,8 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [dob, setDob] = useState('1985-05-15');
-  const [age, setAge] = useState<number | ''>(41);
+  const [dob, setDob] = useState('');
+  const [age, setAge] = useState<number | ''>('');
   const [gender, setGender] = useState<'Male' | 'Female' | 'Other' | 'Undisclosed'>('Male');
   const [bloodGroup, setBloodGroup] = useState<string>('O+');
   const [preferredLanguage, setPreferredLanguage] = useState('Malayalam');
@@ -57,15 +57,32 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
 
   // Clinical Focus & Attending Vaidya
   const [departmentFocus, setDepartmentFocus] = useState('Kayachikitsa (Internal Medicine & Chronic Care)');
-  const [assignedDoctorName, setAssignedDoctorName] = useState('Dr. Sarah Chen, BAMS, MD (Ayurveda)');
+  const [assignedDoctorName, setAssignedDoctorName] = useState('');
+  const [availablePractitioners, setAvailablePractitioners] = useState<Array<{ id: string; name: string; designation?: string }>>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    hospitalApiClient.getStaff().then((staffMembers) => {
+      if (mounted && Array.isArray(staffMembers)) {
+        const docs = staffMembers
+          .filter((s) => s.role === 'DOCTOR' || s.role === 'VAIDYA')
+          .map((s) => ({ id: s.id, name: s.name, designation: s.designation }));
+        setAvailablePractitioners(docs);
+        if (docs.length > 0 && !assignedDoctorName) {
+          setAssignedDoctorName(docs[0].name);
+        }
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   // Medical Background & Allergies
   const [allergyStatus, setAllergyStatus] = useState<AllergyStatus>('not_recorded');
   const [allergiesText, setAllergiesText] = useState('');
   const [medicalHistoryStatus, setMedicalHistoryStatus] = useState<MedicalHistoryStatus>('not_recorded');
-  const [chronicConditionsText, setChronicConditionsText] = useState('Sandhigata Vata (Joint Stiffness)');
+  const [chronicConditionsText, setChronicConditionsText] = useState('');
   const [currentMedicationsText, setCurrentMedicationsText] = useState('');
-  const [clinicalNotes, setClinicalNotes] = useState('Patient registered for classical Ayurvedic consultation and therapy assessment.');
+  const [clinicalNotes, setClinicalNotes] = useState('');
 
   // Duplicate Detection & Submission State
   const [duplicateMatches, setDuplicateMatches] = useState<DuplicatePatientMatch[]>([]);
@@ -114,13 +131,13 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
       setEmergencyRelation('');
       setEmergencyPhone('');
       setDepartmentFocus('Kayachikitsa (Internal Medicine & Chronic Care)');
-      setAssignedDoctorName('Dr. Sarah Chen, BAMS, MD (Ayurveda)');
+      setAssignedDoctorName(availablePractitioners[0]?.name || '');
       setAllergyStatus('not_recorded');
       setAllergiesText('');
       setMedicalHistoryStatus('not_recorded');
-      setChronicConditionsText('Sandhigata Vata (Joint Stiffness)');
+      setChronicConditionsText('');
       setCurrentMedicationsText('');
-      setClinicalNotes('Patient registered for classical Ayurvedic consultation and therapy assessment.');
+      setClinicalNotes('');
       setDuplicateMatches([]);
       setOverrideDuplicate(false);
       setSubmissionError(null);
@@ -658,10 +675,15 @@ export const NewPatientModal: React.FC<NewPatientModalProps> = ({
                 onChange={(e) => setAssignedDoctorName(e.target.value)}
                 className="w-full bg-white border border-[#c6c6c6] h-8 px-2 text-xs"
               >
-                <option value="Dr. Sarah Chen, BAMS, MD (Ayurveda)">Dr. Sarah Chen, BAMS, MD (Ayurveda)</option>
-                <option value="Dr. Rajesh Varma, BAMS (Panchakarma Senior Vaidya)">Dr. Rajesh Varma, BAMS (Panchakarma Senior Vaidya)</option>
-                <option value="Dr. Priya Radhakrishnan, BAMS (Swasthavritta & Stri Roga)">Dr. Priya Radhakrishnan, BAMS (Swasthavritta & Stri Roga)</option>
-                <option value="Dr. Anand Kumar, BAMS (Marma Chikitsa & Shalya)">Dr. Anand Kumar, BAMS (Marma Chikitsa & Shalya)</option>
+                {availablePractitioners.length === 0 ? (
+                  <option value="">No registered Vaidyas / Physicians</option>
+                ) : (
+                  availablePractitioners.map((doc) => (
+                    <option key={doc.id} value={doc.name}>
+                      {doc.name} {doc.designation ? `(${doc.designation})` : ''}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           </div>

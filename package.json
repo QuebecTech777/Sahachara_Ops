@@ -20,7 +20,10 @@
     "test:dispensing": "tsx scripts/verify-pharmacy-dispensing.ts",
     "test:financial": "tsx scripts/verify-financial-operations.ts",
     "test:staff": "tsx scripts/verify-staff-management.ts",
-    "test:auth-guard": "tsx scripts/verify-frontend-auth-guard.ts"
+    "test:auth-guard": "tsx scripts/verify-frontend-auth-guard.ts",
+    "test:api-security": "tsx scripts/verify-api-security-inventory.ts",
+    "test:data-elimination": "tsx scripts/verify-hardcoded-data-elimination.ts",
+    "test:rls": "tsx scripts/verify-supabase-rls.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -112,7 +112,7 @@ export const PanchakarmaManagementView: React.FC<PanchakarmaManagementViewProps>
     'Virechana (Therapeutic Purgation - Pitta Cleansing)'
   );
   const [totalDays, setTotalDays] = useState(14);
-  const [vaidyaName, setVaidyaName] = useState('Dr. Sarah Chen, MD & Vaidya Team');
+  const [vaidyaName, setVaidyaName] = useState('');
   const [dietaryPrescription, setDietaryPrescription] = useState(
     'Samsarjana Krama: Manda (Clear rice water) -> Peya (Rice gruel) -> Vilepi (Thick gruel) -> Yusha (Lentil soup)'
   );
@@ -123,12 +123,12 @@ export const PanchakarmaManagementView: React.FC<PanchakarmaManagementViewProps>
     'Purvakarma (Prep/Snehana-Swedana)' | 'Pradhanakarma (Main Procedure)' | 'Paschatkarma (Dietary Samsarjana)'
   >('Purvakarma (Prep/Snehana-Swedana)');
   const [procedureName, setProcedureName] = useState('Snehapana with Medicated Ghritam');
-  const [therapist, setTherapist] = useState('Senior Therapist Anand Kumar');
-  const [bloodPressure, setBloodPressure] = useState('126/80');
-  const [pulseRate, setPulseRate] = useState('74 bpm');
-  const [appetiteAssessment, setAppetiteAssessment] = useState('Normal digestive fire');
-  const [bowelStatus, setBowelStatus] = useState('Soft formed, regular');
-  const [observations, setObservations] = useState('Patient tolerated procedure smoothly without nausea or fatigue.');
+  const [therapist, setTherapist] = useState('');
+  const [bloodPressure, setBloodPressure] = useState('');
+  const [pulseRate, setPulseRate] = useState('');
+  const [appetiteAssessment, setAppetiteAssessment] = useState('');
+  const [bowelStatus, setBowelStatus] = useState('');
+  const [observations, setObservations] = useState('');
 
   const filteredCourses = courses.filter((c) => {
     return (

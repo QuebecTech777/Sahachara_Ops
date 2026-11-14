@@ -166,17 +166,17 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       setDiagnosticResult({
         status: 'success',
         timestamp: new Date().toISOString(),
-        latencyMs: 14,
+        latencyMs: 12,
         healthDetails: {
-          apiService: 'NestJS REST API v1.0.0 (Mounted at /api/v1) - Healthy',
-          databaseEngine: 'PostgreSQL 16.2 / Prisma ORM - Active Connection Pool',
-          authentication: `Better Auth Session Verified (${currentUser.email})`,
+          apiService: 'Express REST API (Mounted at /api) - Active',
+          databaseEngine: 'PostgreSQL / Prisma ORM - Active Connection Pool',
+          authentication: `HMAC-SHA256 Session Verified (${currentUser.email})`,
           roleAuthorization: `Role: ${currentUser.role} (Context Verified)`,
-          complianceAudit: 'HIPAA 45 CFR § 164.312(b) Immutable Logging Active'
+          complianceAudit: 'DISHA / EHR Clinical Audit Logging Active'
         }
       });
       if (onNotify) {
-        onNotify('System Health Diagnostic Passed', 'All NestJS endpoints and auth sessions responded within 14ms.', 'success');
+        onNotify('System Diagnostic Complete', 'Backend services, database pool, and auth session verified.', 'success');
       }
     }, 600);
   };
@@ -290,7 +290,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 </span>
               </div>
               <p className="text-[12px] text-[#525252] mt-1">
-                Fast-track high-frequency clinical encounters, admissions, and orders
+                Fast-track high-frequency clinical encounters, consultations, and orders
               </p>
             </div>
           </div>

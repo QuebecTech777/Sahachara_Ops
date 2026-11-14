@@ -218,7 +218,7 @@ export const PatientDossierModal: React.FC<PatientDossierModalProps> = ({
                 <span>{currentPatient.age} yrs</span> &bull;
                 <span>{currentPatient.gender}</span> &bull;
                 <span>Blood Group: <strong className="font-mono text-white">{currentPatient.bloodGroup}</strong></span> &bull;
-                <span>Attending: <strong className="text-white">{currentPatient.assignedDoctorName || 'Dr. Sarah Chen, BAMS, MD'}</strong></span>
+                <span>Attending: <strong className="text-white">{currentPatient.assignedDoctorName || 'Unassigned'}</strong></span>
               </div>
             </div>
           </div>
@@ -788,7 +788,7 @@ export const PatientDossierModal: React.FC<PatientDossierModalProps> = ({
                   className="bg-[#24a148] text-white hover:bg-[#198038]"
                   onClick={() => onOpenAdmitPatient(patient)}
                 >
-                  Admit Patient
+                  Register Patient
                 </CarbonButton>
               )
             )}

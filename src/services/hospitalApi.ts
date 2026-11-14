@@ -1,7 +1,6 @@
 import {
   Patient,
   TriageRecord,
-  Bed,
   Doctor,
   Appointment,
   AppointmentReminder,
@@ -67,7 +66,6 @@ import {
 import {
   INITIAL_PATIENTS,
   INITIAL_TRIAGE,
-  INITIAL_BEDS,
   INITIAL_DOCTORS,
   INITIAL_APPOINTMENTS,
   INITIAL_REMINDERS,
@@ -141,7 +139,6 @@ const fetch = hospitalFetch;
 class HospitalApiClient {
   private localPatients: Patient[] = loadOr('patients', INITIAL_PATIENTS);
   private localTriage: TriageRecord[] = loadOr('triage', INITIAL_TRIAGE);
-  private localBeds: Bed[] = loadOr('beds', INITIAL_BEDS);
   private localDoctors: Doctor[] = loadOr('doctors', INITIAL_DOCTORS);
   private localAppointments: Appointment[] = loadOr('appointments', INITIAL_APPOINTMENTS);
   private localReminders: AppointmentReminder[] = loadOr('reminders', INITIAL_REMINDERS);
@@ -587,7 +584,7 @@ class HospitalApiClient {
   // 1. Overview Metrics
   async getOverviewMetrics(): Promise<HospitalOverviewMetrics> {
     try {
-      const res = await fetch('/api/overview');
+      const res = await fetch('/api/overview', { headers: this.getAuthHeaders() });
       if (res.ok) {
         const json = await res.json();
         if (json.success) return json.data;
@@ -596,8 +593,6 @@ class HospitalApiClient {
       // fallback
     }
     const activePatients = this.localPatients.filter((p) => !p.deletedAt);
-    const occupied = this.localBeds.filter((b) => b.status === 'occupied').length;
-    const total = this.localBeds.length;
     const criticalLabs = this.localLabOrders.filter((l) => l.isAbnormal).length;
     const pendingRx = this.localPrescriptions.filter((p) => p.status === 'pending').length;
     const doctorsOnDuty = this.localDoctors.filter((d) => d.status === 'on_duty').length;
@@ -608,15 +603,15 @@ class HospitalApiClient {
 
     return {
       totalPatientsToday: activePatients.length,
-      erWaitTimeMinutes: 18,
-      occupiedBeds: occupied,
-      totalBeds: total,
-      occupancyRate: Math.round((occupied / (total || 1)) * 1000) / 10,
+      erWaitTimeMinutes: 0,
+      occupiedBeds: 0,
+      totalBeds: 0,
+      occupancyRate: 0,
       activeDoctorsOnDuty: doctorsOnDuty,
       criticalLabAlerts: criticalLabs,
       pendingPrescriptions: pendingRx,
-      admittedToday: activePatients.filter((p) => p.admissionStatus === 'inpatient' || p.admissionStatus === 'er').length,
-      dischargedToday: activePatients.filter((p) => p.admissionStatus === 'discharged').length,
+      admittedToday: 0,
+      dischargedToday: 0,
       scheduledAppointmentsToday: scheduledApts,
       activeTreatments: activeTreatmentsCount,
       activePanchakarmaCourses: activePkCount,
@@ -969,7 +964,7 @@ class HospitalApiClient {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err: any = new Error(json.message || json.error || 'Failed to create walk-in admission');
+      const err: any = new Error(json.message || json.error || 'Failed to create walk-in appointment');
       err.status = res.status;
       err.code = json.code;
       throw err;
@@ -982,7 +977,7 @@ class HospitalApiClient {
       return json.data;
     }
 
-    throw new Error('Unexpected response creating walk-in admission');
+    throw new Error('Unexpected response creating walk-in appointment');
   }
 
   async checkInAppointment(id: string, receptionNotes?: string): Promise<Appointment> {
@@ -1434,7 +1429,7 @@ class HospitalApiClient {
 
     this.localTriage.unshift(newRecord);
     save('triage', this.localTriage);
-    this.addAuditLog(newRecord.triageNurse, currentUser.role, 'Emergency Triage Scored', 'Triage Admission', `ESI ${newRecord.esiLevel} assigned to ${newRecord.patientName}`, newRecord.mrn);
+    this.addAuditLog(newRecord.triageNurse, currentUser.role, 'Emergency Triage Scored', 'Triage Intake', `ESI ${newRecord.esiLevel} assigned to ${newRecord.patientName}`, newRecord.mrn);
     notifyListeners();
     return newRecord;
   }
@@ -1456,57 +1451,6 @@ class HospitalApiClient {
       save('triage', this.localTriage);
       notifyListeners();
     }
-  }
-
-  // 5. Beds
-  async getBeds(): Promise<Bed[]> {
-    try {
-      const res = await fetch('/api/beds');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success) {
-          this.localBeds = json.data;
-          save('beds', this.localBeds);
-          return json.data;
-        }
-      }
-    } catch {
-      // fallback
-    }
-    return this.localBeds;
-  }
-
-  async updateBed(id: string, updates: Partial<Bed>): Promise<Bed> {
-    const currentUser = this.getCurrentUser();
-    try {
-      const res = await fetch(`/api/beds/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success) {
-          const idx = this.localBeds.findIndex((b) => b.id === id || b.bedNumber === id);
-          if (idx !== -1) this.localBeds[idx] = json.data;
-          save('beds', this.localBeds);
-          notifyListeners();
-          return json.data;
-        }
-      }
-    } catch {
-      // fallback
-    }
-
-    const idx = this.localBeds.findIndex((b) => b.id === id || b.bedNumber === id);
-    if (idx !== -1) {
-      this.localBeds[idx] = { ...this.localBeds[idx], ...updates };
-      save('beds', this.localBeds);
-      this.addAuditLog(currentUser.name, currentUser.role, 'Bed Updated', 'Bed Transfer', `Bed ${this.localBeds[idx].bedNumber} set to ${this.localBeds[idx].status}`);
-      notifyListeners();
-      return this.localBeds[idx];
-    }
-    throw new Error('Bed not found');
   }
 
   // 6. Doctors
@@ -2912,9 +2856,9 @@ class HospitalApiClient {
     const newCon: Consultation = {
       id: `con-${Date.now()}`,
       consultationNumber: `CON-2026-00${Math.floor(50 + Math.random() * 50)}`,
-      patientId: consultation.patientId || 'pat-101',
+      patientId: consultation.patientId || '',
       patientName: consultation.patientName || 'Registered Patient',
-      patientMrn: consultation.patientMrn || 'MRN-84920',
+      patientMrn: consultation.patientMrn || '',
       doctorId: consultation.doctorId || cur.id,
       doctorName: consultation.doctorName || cur.name,
       appointmentId: consultation.appointmentId,
@@ -2999,12 +2943,12 @@ class HospitalApiClient {
     const newPlan: TreatmentPlan = {
       id: `tp-${Date.now()}`,
       planNumber: `TP-2026-00${Math.floor(40 + Math.random() * 50)}`,
-      patientId: plan.patientId || 'pat-101',
+      patientId: plan.patientId || '',
       patientName: plan.patientName || 'Registered Patient',
-      patientMrn: plan.patientMrn || 'MRN-84920',
+      patientMrn: plan.patientMrn || '',
       doctorId: plan.doctorId || cur.id,
       doctorName: plan.doctorName || cur.name,
-      assignedTherapist: plan.assignedTherapist || 'Senior Therapist Anand Kumar',
+      assignedTherapist: plan.assignedTherapist || 'Assigned Clinical Therapist',
       therapyType: plan.therapyType || 'Abhyanga (Herbal Full Body Massage)',
       clinicalObjective: plan.clinicalObjective || 'Therapeutic Dosha Balancing',
       oilOrFormulation: plan.oilOrFormulation || 'Sahacharadi Thailam',
@@ -3091,9 +3035,9 @@ class HospitalApiClient {
     const newCourse: PanchakarmaCourse = {
       id: `pk-${Date.now()}`,
       courseNumber: `PK-2026-00${Math.floor(20 + Math.random() * 50)}`,
-      patientId: course.patientId || 'pat-101',
+      patientId: course.patientId || '',
       patientName: course.patientName || 'Patient',
-      patientMrn: course.patientMrn || 'MRN-84920',
+      patientMrn: course.patientMrn || '',
       vaidyaName: course.vaidyaName || `${cur.name} & Vaidya Team`,
       protocol: course.protocol || 'Virechana (Therapeutic Purgation - Pitta Cleansing)',
       currentPhase: 'Purvakarma (Prep/Snehana-Swedana)',
@@ -3109,7 +3053,7 @@ class HospitalApiClient {
           date: new Date().toISOString().split('T')[0],
           phase: 'Purvakarma (Prep/Snehana-Swedana)',
           procedureName: 'Preparatory Deepana-Pachana & Snehana',
-          therapist: 'Anand Kumar',
+          therapist: 'Assigned Clinical Therapist',
           bloodPressure: '124/80',
           pulseRate: '72 bpm',
           appetiteAssessment: 'Normal',
@@ -4162,7 +4106,6 @@ class HospitalApiClient {
   resetAll() {
     this.localPatients = [...INITIAL_PATIENTS];
     this.localTriage = [...INITIAL_TRIAGE];
-    this.localBeds = [...INITIAL_BEDS];
     this.localDoctors = [...INITIAL_DOCTORS];
     this.localAppointments = [...INITIAL_APPOINTMENTS];
     this.localReminders = [...INITIAL_REMINDERS];
@@ -4181,7 +4124,6 @@ class HospitalApiClient {
 
     save('patients', this.localPatients);
     save('triage', this.localTriage);
-    save('beds', this.localBeds);
     save('doctors', this.localDoctors);
     save('appointments', this.localAppointments);
     save('reminders', this.localReminders);

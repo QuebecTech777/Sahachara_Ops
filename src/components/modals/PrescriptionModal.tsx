@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CarbonModal } from '../carbon/CarbonModal';
 import { Patient, Prescription } from '../../types/hospital';
+import { hospitalApiClient } from '../../services/hospitalApi';
 
 interface PrescriptionModalProps {
   isOpen: boolean;
@@ -16,13 +17,30 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   onSubmit
 }) => {
   const [selectedPatientId, setSelectedPatientId] = useState(patients[0]?.id || '');
-  const [medicationName, setMedicationName] = useState('Metoprolol Succinate');
-  const [dosage, setDosage] = useState('25 mg');
-  const [frequency, setFrequency] = useState('Once daily in the morning');
+  const [medicationName, setMedicationName] = useState('');
+  const [dosage, setDosage] = useState('');
+  const [frequency, setFrequency] = useState('Once daily');
   const [route, setRoute] = useState<Prescription['route']>('Oral');
-  const [duration, setDuration] = useState('14 days');
-  const [doctorName, setDoctorName] = useState('Dr. Sarah Chen, MD');
-  const [pharmacyNotes, setPharmacyNotes] = useState('Take with food. Monitor morning heart rate.');
+  const [duration, setDuration] = useState('7 days');
+  const [doctorName, setDoctorName] = useState('');
+  const [pharmacyNotes, setPharmacyNotes] = useState('');
+  const [availablePractitioners, setAvailablePractitioners] = useState<Array<{ id: string; name: string; designation?: string }>>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    hospitalApiClient.getStaff().then((staffMembers) => {
+      if (mounted && Array.isArray(staffMembers)) {
+        const docs = staffMembers
+          .filter((s) => s.role === 'DOCTOR' || s.role === 'VAIDYA')
+          .map((s) => ({ id: s.id, name: s.name, designation: s.designation }));
+        setAvailablePractitioners(docs);
+        if (docs.length > 0 && !doctorName) {
+          setDoctorName(docs[0].name);
+        }
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   const patient = patients.find((p) => p.id === selectedPatientId) || patients[0];
 
@@ -163,11 +181,15 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
             onChange={(e) => setDoctorName(e.target.value)}
             className="w-full carbon-input"
           >
-            <option value="Dr. Sarah Chen, MD (Cardiology)">Dr. Sarah Chen, MD (Cardiology)</option>
-            <option value="Dr. Robert Rivera, MD (Emergency)">Dr. Robert Rivera, MD (Emergency)</option>
-            <option value="Dr. Arthur Pendelton, MD (Orthopedics)">Dr. Arthur Pendelton, MD (Orthopedics)</option>
-            <option value="Dr. Elena Rostova, MD (Critical Care)">Dr. Elena Rostova, MD (Critical Care)</option>
-            <option value="Dr. Maya Lin, MD (Pediatrics)">Dr. Maya Lin, MD (Pediatrics)</option>
+            {availablePractitioners.length === 0 ? (
+              <option value="">No registered authorizing physicians</option>
+            ) : (
+              availablePractitioners.map((doc) => (
+                <option key={doc.id} value={doc.name}>
+                  {doc.name} {doc.designation ? `(${doc.designation})` : ''}
+                </option>
+              ))
+            )}
           </select>
         </div>
 

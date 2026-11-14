@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CarbonModal } from '../carbon/CarbonModal';
 import { Patient, LabOrder } from '../../types/hospital';
+import { hospitalApiClient } from '../../services/hospitalApi';
 
 interface LabOrderModalProps {
   isOpen: boolean;
@@ -16,10 +17,27 @@ export const LabOrderModal: React.FC<LabOrderModalProps> = ({
   onSubmit
 }) => {
   const [selectedPatientId, setSelectedPatientId] = useState(patients[0]?.id || '');
-  const [testType, setTestType] = useState<LabOrder['testType']>('Cardiac Troponin I (High-Sensitivity)');
-  const [priority, setPriority] = useState<LabOrder['priority']>('STAT (Immediate)');
-  const [orderingDoctor, setOrderingDoctor] = useState('Dr. Sarah Chen, MD');
-  const [labNotes, setLabNotes] = useState('Evaluate acute cardiac ischemia markers.');
+  const [testType, setTestType] = useState<LabOrder['testType']>('Complete Blood Count (CBC)');
+  const [priority, setPriority] = useState<LabOrder['priority']>('Routine');
+  const [orderingDoctor, setOrderingDoctor] = useState('');
+  const [labNotes, setLabNotes] = useState('');
+  const [availablePractitioners, setAvailablePractitioners] = useState<Array<{ id: string; name: string; designation?: string }>>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    hospitalApiClient.getStaff().then((staffMembers) => {
+      if (mounted && Array.isArray(staffMembers)) {
+        const docs = staffMembers
+          .filter((s) => s.role === 'DOCTOR' || s.role === 'VAIDYA')
+          .map((s) => ({ id: s.id, name: s.name, designation: s.designation }));
+        setAvailablePractitioners(docs);
+        if (docs.length > 0 && !orderingDoctor) {
+          setOrderingDoctor(docs[0].name);
+        }
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   const patient = patients.find((p) => p.id === selectedPatientId) || patients[0];
 
@@ -123,10 +141,15 @@ export const LabOrderModal: React.FC<LabOrderModalProps> = ({
             onChange={(e) => setOrderingDoctor(e.target.value)}
             className="w-full carbon-input"
           >
-            <option value="Dr. Sarah Chen, MD (Cardiology)">Dr. Sarah Chen, MD (Cardiology)</option>
-            <option value="Dr. Robert Rivera, MD (Emergency)">Dr. Robert Rivera, MD (Emergency)</option>
-            <option value="Dr. Arthur Pendelton, MD (Orthopedics)">Dr. Arthur Pendelton, MD (Orthopedics)</option>
-            <option value="Dr. Elena Rostova, MD (Critical Care)">Dr. Elena Rostova, MD (Critical Care)</option>
+            {availablePractitioners.length === 0 ? (
+              <option value="">No registered ordering physicians</option>
+            ) : (
+              availablePractitioners.map((doc) => (
+                <option key={doc.id} value={doc.name}>
+                  {doc.name} {doc.designation ? `(${doc.designation})` : ''}
+                </option>
+              ))
+            )}
           </select>
         </div>
 

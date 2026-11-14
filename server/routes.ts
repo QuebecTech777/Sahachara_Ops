@@ -139,6 +139,7 @@ import {
   dbUpdateUserRole,
   dbCreateStaff,
   dbUpdateStaff,
+  dbGetOverviewMetrics,
   dbGetStaffList,
   dbGetStaffById,
   dbCreateStaffMember,
@@ -632,8 +633,8 @@ apiRouter.get('/departments/:id/staff', requireRole(VALID_USER_ROLES as unknown 
 // ==========================================
 // 1. OVERVIEW & METRICS (OverviewController)
 // ==========================================
-apiRouter.get('/overview', requireRole(VALID_USER_ROLES as unknown as UserRole[]), (_req: Request, res: Response) => {
-  const metrics = hospitalStore.getMetrics();
+apiRouter.get('/overview', requireRole(VALID_USER_ROLES as unknown as UserRole[]), async (_req: Request, res: Response) => {
+  const metrics = await dbGetOverviewMetrics();
   res.json({ success: true, data: metrics });
 });
 
@@ -1824,22 +1825,8 @@ apiRouter.patch('/triage/:id', requirePermission(CLINICAL_PERMISSIONS.TRIAGE_MAN
 });
 
 // ==========================================
-// 5. BEDS & WARDS (BedsController)
+// 5. CLINICAL WORKFORCE & APPOINTMENT TRIAGE
 // ==========================================
-apiRouter.get('/beds', requireRole(VALID_USER_ROLES as unknown as UserRole[]), (_req: Request, res: Response) => {
-  res.json({ success: true, data: hospitalStore.beds });
-});
-
-apiRouter.patch('/beds/:id', requirePermission(CLINICAL_PERMISSIONS.BED_MANAGE), (req: AuthenticatedRequest, res: Response) => {
-  const index = hospitalStore.beds.findIndex((b) => b.id === req.params.id || b.bedNumber === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ success: false, message: 'Bed not found' });
-  }
-  const updated = { ...hospitalStore.beds[index], ...req.body };
-  hospitalStore.beds[index] = updated;
-  hospitalStore.logAudit(req.userName || 'Bed Management Dispatch', req.userRole!, 'Updated Bed Status', 'Bed Transfer', `Bed ${updated.bedNumber} status changed to ${updated.status}`);
-  res.json({ success: true, data: updated });
-});
 
 // ==========================================
 // 6. DOCTORS & CLINICAL WORKFORCE STAFF (StaffController)
@@ -1901,7 +1888,7 @@ apiRouter.get('/staff', requireRole(['SUPER_ADMIN', 'ADMIN']), async (req: Authe
 });
 
 // 2. Staff profile retrieval
-apiRouter.get('/staff/:id', async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/staff/:id', requireRole(VALID_USER_ROLES as unknown as UserRole[]), async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.userRole) {
       return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Authentication required.' });
@@ -2463,8 +2450,8 @@ apiRouter.post('/pharmacy/prescriptions', requirePermission(CLINICAL_PERMISSIONS
     encounterId: body.encounterId,
     patientId: body.patientId,
     patientName: body.patientName || 'Walk-in Patient',
-    mrn: body.mrn || 'MRN-84920',
-    doctorId: body.doctorId || req.userId || 'doc-201',
+    mrn: body.mrn || '',
+    doctorId: body.doctorId || req.userId || '',
     doctorName: body.doctorName || actor,
     prescribingPractitionerRole: role,
     datePrescribed: new Date().toISOString(),
@@ -2916,7 +2903,7 @@ apiRouter.post('/laboratory', requirePermission(CLINICAL_PERMISSIONS.LAB_ORDER_C
     orderNumber: `LAB-2026-${Math.floor(1000 + Math.random() * 9000)}`,
     patientId: body.patientId,
     patientName: body.patientName || 'Walk-in Patient',
-    mrn: body.mrn || 'MRN-84920',
+    mrn: body.mrn || '',
     testType: body.testType,
     priority: body.priority || 'Routine',
     orderingDoctor: body.orderingDoctor || req.userName || 'Dr. Attending Physician',
@@ -3192,7 +3179,7 @@ apiRouter.post('/billing', requirePermission(CLINICAL_PERMISSIONS.BILLING_MANAGE
     invoiceNumber: body.invoiceNumber || undefined,
     patientId: body.patientId,
     patientName: body.patientName || 'Walk-in Patient',
-    mrn: body.mrn || 'MRN-84920',
+    mrn: body.mrn || '',
     admissionDate: body.admissionDate || new Date().toISOString(),
     dischargeDate: body.dischargeDate,
     items: validatedItems,
@@ -3843,7 +3830,7 @@ apiRouter.get('/billing/refunds', requirePermission(CLINICAL_PERMISSIONS.BILLING
 });
 
 // Explicit Immutability Guards for Refund Ledger Entries
-apiRouter.all('/billing/refunds/ledger*', (req: AuthenticatedRequest, res: Response) => {
+apiRouter.all('/billing/refunds/ledger*', requirePermission(CLINICAL_PERMISSIONS.REFUND_EXECUTE), (req: AuthenticatedRequest, res: Response) => {
   if (['PUT', 'PATCH', 'DELETE', 'POST'].includes(req.method)) {
     return res.status(405).json({
       success: false,
@@ -4249,9 +4236,9 @@ apiRouter.post('/consultations', requirePermission(CLINICAL_PERMISSIONS.CONSULTA
     consultationNumber: `CON-2026-00${Math.floor(50 + Math.random() * 50)}`,
     patientId: body.patientId,
     patientName: body.patientName || 'Registered Patient',
-    patientMrn: body.patientMrn || 'MRN-84920',
-    doctorId: body.doctorId || 'doc-201',
-    doctorName: body.doctorName || 'Dr. Sarah Chen, MD',
+    patientMrn: body.patientMrn || '',
+    doctorId: body.doctorId || req.userId || '',
+    doctorName: body.doctorName || actor,
     appointmentId: body.appointmentId,
     dateTime: new Date().toISOString(),
     chiefComplaint: body.chiefComplaint || 'Ayurvedic Clinical Intake',
@@ -4318,10 +4305,10 @@ apiRouter.post('/treatments', requirePermission(CLINICAL_PERMISSIONS.AYURVEDIC_T
     planNumber: `TP-2026-00${Math.floor(40 + Math.random() * 50)}`,
     patientId: body.patientId,
     patientName: body.patientName || 'Patient',
-    patientMrn: body.patientMrn || 'MRN-84920',
-    doctorId: body.doctorId || 'usr-vaidya',
-    doctorName: body.doctorName || 'Dr. Sarah Chen, BAMS, MD (Ayu)',
-    assignedTherapist: body.assignedTherapist || 'Senior Therapist Anand Kumar',
+    patientMrn: body.patientMrn || '',
+    doctorId: body.doctorId || req.userId || '',
+    doctorName: body.doctorName || actor,
+    assignedTherapist: body.assignedTherapist || 'Assigned Clinical Therapist',
     therapyType: body.therapyType || 'Abhyanga (Herbal Full Body Massage)',
     clinicalObjective: body.clinicalObjective || 'Snehana and Vata Shamana',
     oilOrFormulation: body.oilOrFormulation || 'Sahacharadi Thailam',
@@ -4366,8 +4353,8 @@ apiRouter.post('/panchakarma', requirePermission(CLINICAL_PERMISSIONS.PANCHAKARM
     courseNumber: `PK-2026-00${Math.floor(20 + Math.random() * 50)}`,
     patientId: body.patientId,
     patientName: body.patientName || 'Patient',
-    patientMrn: body.patientMrn || 'MRN-84920',
-    vaidyaName: body.vaidyaName || 'Dr. Sarah Chen, BAMS, MD (Ayu)',
+    patientMrn: body.patientMrn || '',
+    vaidyaName: body.vaidyaName || actor,
     protocol: body.protocol || 'Virechana (Therapeutic Purgation - Pitta Cleansing)',
     currentPhase: 'Purvakarma (Prep/Snehana-Swedana)',
     startDate: body.startDate || new Date().toISOString().split('T')[0],
@@ -4382,7 +4369,7 @@ apiRouter.post('/panchakarma', requirePermission(CLINICAL_PERMISSIONS.PANCHAKARM
         date: new Date().toISOString().split('T')[0],
         phase: 'Purvakarma (Prep/Snehana-Swedana)',
         procedureName: 'Deepana-Pachana with Trikatu & Snehana preparation',
-        therapist: 'Anand Kumar',
+        therapist: body.therapist || 'Assigned Therapist',
         bloodPressure: '124/80',
         pulseRate: '72 bpm',
         appetiteAssessment: 'Mild hunger',

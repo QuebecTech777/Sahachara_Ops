@@ -66,7 +66,7 @@ interface PatientsDirectoryViewProps {
 export const PatientsDirectoryView: React.FC<PatientsDirectoryViewProps> = ({
   patients,
   currentUserRole,
-  currentUserName = 'Dr. Sarah Chen, MD',
+  currentUserName = 'Staff Member',
   onOpenNewPatientModal,
   onOpenEditPatientModal,
   onOpenDeletePatientModal,
@@ -111,21 +111,18 @@ export const PatientsDirectoryView: React.FC<PatientsDirectoryViewProps> = ({
   };
 
   const filteredPatients = patients.filter((p) => {
-    if (selectedFilter === 'all') return true;
+    if (selectedFilter === 'all') return p.status !== 'archived';
     if (selectedFilter === 'archived') return p.status === 'archived';
+    if (selectedFilter === 'outpatient') return (p.admissionStatus === 'outpatient' || !p.admissionStatus) && p.status !== 'archived';
     return p.admissionStatus === selectedFilter && p.status !== 'archived';
   });
 
   const getStatusTag = (status: AdmissionStatus): { type: CarbonTagType; label: string } => {
     switch (status) {
-      case 'inpatient':
-        return { type: 'blue', label: 'INPATIENT' };
       case 'outpatient':
         return { type: 'teal', label: 'OUTPATIENT' };
-      case 'discharged':
-        return { type: 'cool-gray', label: 'DISCHARGED' };
       default:
-        return { type: 'warm-gray', label: String(status).toUpperCase() };
+        return { type: 'teal', label: 'OUTPATIENT' };
     }
   };
 
@@ -178,7 +175,7 @@ export const PatientsDirectoryView: React.FC<PatientsDirectoryViewProps> = ({
     },
     {
       key: 'admissionStatus',
-      header: 'Admission State',
+      header: 'Care Status',
       sortable: true,
       render: (p) => {
         const tag = getStatusTag(p.admissionStatus);
@@ -190,7 +187,7 @@ export const PatientsDirectoryView: React.FC<PatientsDirectoryViewProps> = ({
       header: 'Attending Physician',
       render: (p) => (
         <span className="text-xs text-[#161616] font-medium">
-          {p.assignedDoctorName || 'Dr. Sarah Chen, MD'}
+          {p.assignedDoctorName || 'Unassigned'}
         </span>
       )
     },
@@ -315,10 +312,8 @@ export const PatientsDirectoryView: React.FC<PatientsDirectoryViewProps> = ({
         selectedId={selectedFilter}
         onSelect={(id) => setSelectedFilter(id as any)}
         tabs={[
-          { id: 'all', label: 'All Patients', count: patients.length },
-          { id: 'outpatient', label: 'Outpatients', count: patients.filter((p) => p.admissionStatus === 'outpatient' && p.status !== 'archived').length },
-          { id: 'inpatient', label: 'Inpatients', count: patients.filter((p) => p.admissionStatus === 'inpatient' && p.status !== 'archived').length },
-          { id: 'discharged', label: 'Discharged', count: patients.filter((p) => p.admissionStatus === 'discharged' && p.status !== 'archived').length },
+          { id: 'all', label: 'All Patients', count: patients.filter((p) => p.status !== 'archived').length },
+          { id: 'outpatient', label: 'Outpatients', count: patients.filter((p) => (p.admissionStatus === 'outpatient' || !p.admissionStatus) && p.status !== 'archived').length },
           { id: 'archived', label: 'Archived Dossiers', count: patients.filter((p) => p.status === 'archived').length }
         ]}
       />
@@ -367,7 +362,7 @@ export const PatientsDirectoryView: React.FC<PatientsDirectoryViewProps> = ({
                     </CarbonTag>
                   </div>
                   <div className="text-[11px] text-[#525252]">
-                    DOB: {patient.dob} &bull; Attending: <span className="text-[#161616] font-medium">{patient.assignedDoctorName || 'Dr. Sarah Chen, MD'}</span>
+                    DOB: {patient.dob} &bull; Attending: <span className="text-[#161616] font-medium">{patient.assignedDoctorName || 'Unassigned'}</span>
                   </div>
                 </div>
 

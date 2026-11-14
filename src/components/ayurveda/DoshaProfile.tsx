@@ -55,7 +55,7 @@ export const DoshaProfile: React.FC<DoshaProfileProps> = ({
       kapha: ['Shleshaka Kapha (Synovial Lubrication)']
     },
     assessmentDate: new Date().toISOString().split('T')[0],
-    assessedByVaidya: patient.assignedDoctorName || 'Dr. Sarah Chen, BAMS, MD (Ayurveda)',
+    assessedByVaidya: patient.assignedDoctorName || 'Attending Vaidya',
     clinicalObservations: 'Patient exhibits signs of Vata vriddhi with joint crepitus, dry skin, and irregular digestive fire.',
     recommendedHerbs: ['Sahacharadi Thailam', 'Dhanwantharam Kashayam', 'Ashwagandha Churna'],
     dietaryGuidance: 'Vata-pacifying warm, unctuous diet (Snigdha ahara); avoid dry, cold, and raw foods.'

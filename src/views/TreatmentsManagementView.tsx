@@ -147,10 +147,28 @@ export const TreatmentsManagementView: React.FC<TreatmentsManagementViewProps> =
   const [oilOrFormulation, setOilOrFormulation] = useState('Sahacharadi Thailam');
   const [totalSessions, setTotalSessions] = useState(7);
   const [frequency, setFrequency] = useState<'Daily' | 'Alternate Days' | 'Twice Weekly' | 'Weekly'>('Daily');
-  const [assignedTherapist, setAssignedTherapist] = useState('Senior Therapist Anand Kumar');
+  const [assignedTherapist, setAssignedTherapist] = useState('');
   const [roomNumber, setRoomNumber] = useState('Therapy Suite 01');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+
+  const [availableTherapists, setAvailableTherapists] = useState<StaffMember[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    hospitalApi.getStaff().then((staffList) => {
+      if (mounted && Array.isArray(staffList)) {
+        const therapists = staffList.filter(
+          (s) => s.designation?.toLowerCase().includes('therapist') || s.role === 'DOCTOR' || s.role === 'VAIDYA'
+        );
+        setAvailableTherapists(therapists);
+        if (therapists.length > 0 && !assignedTherapist) {
+          setAssignedTherapist(therapists[0].name);
+        }
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   const [recordingSessionPlanId, setRecordingSessionPlanId] = useState<string | null>(null);
   const [sessionNotes, setSessionNotes] = useState('');
@@ -853,7 +871,7 @@ export const TreatmentsManagementView: React.FC<TreatmentsManagementViewProps> =
                     <div className="mt-2.5">
                       <h3 className="font-semibold text-sm text-[#161616]">{room.name}</h3>
                       <div className="text-[11px] font-mono text-[#8a3ffc] mt-0.5">
-                        {room.roomType.replace('_', ' ')}
+                        {room.roomType.replace(/_/g, ' ')}
                       </div>
                       {room.description && (
                         <p className="text-xs text-[#525252] mt-1 italic">
@@ -1173,9 +1191,13 @@ export const TreatmentsManagementView: React.FC<TreatmentsManagementViewProps> =
                 onChange={(e) => setAssignedTherapist(e.target.value)}
                 className="w-full bg-[#f4f4f4] text-[#161616] border border-[#8d8d8d] p-2 text-xs focus:bg-white focus:border-[#0f62fe] outline-none"
               >
-                <option>Senior Therapist Anand Kumar</option>
-                <option>Therapist Lakshmi Menon</option>
-                <option>Therapist Priya Nambiar</option>
+                {availableTherapists.length === 0 ? (
+                  <option value="">No registered therapy staff</option>
+                ) : (
+                  availableTherapists.map((t) => (
+                    <option key={t.id} value={t.name}>{t.name} ({t.designation || t.role})</option>
+                  ))
+                )}
               </select>
             </div>
             <div>

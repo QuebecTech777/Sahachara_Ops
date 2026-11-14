@@ -225,7 +225,7 @@ export const DownloadSummaryModal: React.FC<DownloadSummaryModalProps> = ({
         ['Residential Address', `"${patient.address || 'Unrecorded'}"`],
         ['Admission Status', patient.admissionStatus.toUpperCase()],
         ['Ward & Bed Location', `${patient.currentWard || 'Outpatient'} ${patient.currentBed ? `(${patient.currentBed})` : ''}`],
-        ['Attending Physician', patient.assignedDoctorName || 'Dr. Sarah Chen, MD'],
+        ['Attending Physician', patient.assignedDoctorName || 'Unassigned'],
         ['Billing Policy', '"Direct Hospital Self-Pay Settlement (No Insurance Coverage)"'],
         [''],
         ['--- SECTION: CLINICAL HISTORY & ALLERGIES ---'],

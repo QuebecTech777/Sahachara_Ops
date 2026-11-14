@@ -121,7 +121,7 @@ export function generatePatientSummaryPDF({
     body: [
       [
         `Name: ${patient.firstName} ${patient.lastName}\nMRN: ${patient.mrn}\nAge/Gender: ${patient.age} yrs / ${patient.gender}\nBlood Group: ${patient.bloodGroup}\nDOB: ${patient.dob || 'N/A'}`,
-        `Status: ${patient.admissionStatus.toUpperCase()}\nClinic: Sahachara Outpatient Clinic\nAttending: ${patient.assignedDoctorName || 'Dr. Sarah Chen, BAMS, MD'}\nConsultation: Active Encounters`,
+        `Status: ${patient.admissionStatus.toUpperCase()}\nClinic: Sahachara Outpatient Clinic\nAttending: ${patient.assignedDoctorName || 'Unassigned'}\nConsultation: Active Encounters`,
         `Phone: ${patient.phone}\nEmail: ${patient.email || 'N/A'}\nAddress: ${typeof patient.address === 'string' ? patient.address.slice(0, 35) : 'Registered Address'}\nPrimary Contact: ${patient.emergencyContact?.name || 'N/A'} (${patient.emergencyContact?.phone || 'N/A'})`
       ]
     ],
@@ -627,31 +627,31 @@ export function generateHospitalExecutivePDF({
   currentY += 3;
 
   const m = metrics || {
-    totalPatientsToday: 148,
-    erWaitTimeMinutes: 18,
-    occupiedBeds: 5,
-    totalBeds: 12,
-    occupancyRate: 41.7,
-    activeDoctorsOnDuty: 4,
-    criticalLabAlerts: 3,
-    pendingPrescriptions: 1,
-    admittedToday: 4,
-    dischargedToday: 2,
-    scheduledAppointmentsToday: 5,
-    activeTreatments: 8,
-    activePanchakarmaCourses: 5,
-    todayRevenueInr: 142500
+    totalPatientsToday: 0,
+    activeConsultationsToday: 0,
+    scheduledAppointmentsToday: 0,
+    activeTreatments: 0,
+    activePanchakarmaCourses: 0,
+    activeDoctorsOnDuty: 0,
+    criticalLabAlerts: 0,
+    pendingPrescriptions: 0,
+    todayRevenueInr: 0,
+    erWaitTimeMinutes: 0,
+    occupiedBeds: 0,
+    totalBeds: 0,
+    occupancyRate: 0,
+    admittedToday: 0,
+    dischargedToday: 0
   };
 
   const kpiRows = [
-    ['Total Patient Encounters Today', `${m.totalPatientsToday} Patients`, '150 Patients / Day', 'NOMINAL (98.7% Capacity)'],
-    ['Outpatient Consultation Wait Time', `${m.erWaitTimeMinutes || 12} Minutes`, '< 20 Minutes Target', 'BENCHMARK MET (Prompt Vaidya Intake)'],
-    ['Panchakarma Therapy Chambers Active', '5 / 5 Suites Active (85% Occupancy)', '80% Operating Capacity Target', 'OPTIMAL UTILIZATION'],
-    ['Clinical Staff / Vaidyas on Duty', `${m.activeDoctorsOnDuty} Active Physicians`, '4 Minimum Shift Requirement', 'ADEQUATELY STAFFED'],
-    ['Critical Diagnostic Lab Alerts', `${m.criticalLabAlerts} Critical Panels`, '0 STAT Alerts Target', m.criticalLabAlerts > 0 ? 'ATTENTION REQUIRED (Stat Bay)' : 'NORMAL'],
-    ['Central Pharmacy Pending Orders', `${m.pendingPrescriptions} Orders In Queue`, '< 5 Orders Target', 'DISPENSING FLOW OPTIMAL'],
-    ['Active Panchakarma Therapy Courses', `${m.activePanchakarmaCourses} Registered Courses`, '8 Suites Capacity', 'SUITES ACTIVE'],
-    ['Gross Revenue Realized Today', `Rs. ${Math.round(m.todayRevenueInr).toLocaleString()}`, 'Rs. 1,20,000 Target', 'REVENUE BUDGET EXCEEDED']
+    ['Total Patient Encounters Today', `${m.totalPatientsToday} Patients`, 'OPD Encounters', m.totalPatientsToday > 0 ? 'ACTIVE ENCOUNTERS' : 'NO PATIENTS RECORDED'],
+    ['Panchakarma Therapy Chambers Active', `${m.activePanchakarmaCourses} Active Courses`, 'Specialist Shodhana Suites', m.activePanchakarmaCourses > 0 ? 'ACTIVE' : 'IDLE / AVAILABLE'],
+    ['Clinical Staff / Vaidyas on Duty', `${m.activeDoctorsOnDuty} Active Physicians`, 'On-Duty Roster', m.activeDoctorsOnDuty > 0 ? 'ON DUTY' : 'NO ACTIVE CLINICIANS'],
+    ['Critical Diagnostic Lab Alerts', `${m.criticalLabAlerts} Critical Panels`, '0 STAT Alerts Target', m.criticalLabAlerts > 0 ? 'ATTENTION REQUIRED' : 'NOMINAL (0 STAT ALERTS)'],
+    ['Central Pharmacy Pending Orders', `${m.pendingPrescriptions} Orders In Queue`, 'Dispensary Queue', m.pendingPrescriptions > 0 ? 'PENDING DISPENSATION' : 'QUEUE CLEAR'],
+    ['Active Panchakarma Therapy Courses', `${m.activePanchakarmaCourses} Registered Courses`, 'Enrolled Courses', m.activePanchakarmaCourses > 0 ? 'COURSES ACTIVE' : 'NO ACTIVE COURSES'],
+    ['Gross Revenue Realized Today', `Rs. ${Math.round(m.todayRevenueInr || 0).toLocaleString()}`, 'Daily Collections', m.todayRevenueInr > 0 ? 'REALIZED COLLECTIONS' : 'NO COLLECTIONS RECORDED']
   ];
 
   autoTable(doc, {
@@ -693,10 +693,10 @@ export function generateHospitalExecutivePDF({
   currentY += 3;
 
   const deptRows = [
-    ['Outpatient Consultations', `${consultations.length || 3} Completed / Active`, 'Kayachikitsa & General OPD', 'Verified by Attending Vaidya'],
-    ['Panchakarma Therapy Courses', `${panchakarma.length || 3} Courses Enrolled`, 'Panchakarma Shodhana Suites', 'Purva / Pradhana / Paschat Karma'],
-    ['E-Prescriptions Transmitted', `${prescriptions.length || 6} Prescriptions Issued`, 'Central Hospital Formulary', `${prescriptions.filter((p) => p.status === 'dispensed').length} Dispensed / Verified`],
-    ['Scheduled Appointments Today', `${appointments.length || 5} Consultations Booked`, 'Specialist OPD Scheduling', 'Automated SMS/Email Reminders Active']
+    ['Outpatient Consultations', `${consultations.length} Completed / Active`, 'Kayachikitsa & General OPD', 'Verified by Attending Vaidya'],
+    ['Panchakarma Therapy Courses', `${panchakarma.length} Courses Enrolled`, 'Panchakarma Shodhana Suites', 'Purva / Pradhana / Paschat Karma'],
+    ['E-Prescriptions Transmitted', `${prescriptions.length} Prescriptions Issued`, 'Central Hospital Formulary', `${prescriptions.filter((p) => p.status === 'dispensed').length} Dispensed / Verified`],
+    ['Scheduled Appointments Today', `${appointments.length} Consultations Booked`, 'Specialist OPD Scheduling', 'OPD Consultations']
   ];
 
   autoTable(doc, {

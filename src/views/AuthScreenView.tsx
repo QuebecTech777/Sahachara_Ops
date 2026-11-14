@@ -151,59 +151,6 @@ export const AuthScreenView: React.FC<AuthScreenViewProps> = ({
     }
   };
 
-  // Quick staff personas for the 6 permitted RBAC roles
-  const quickPersonas = [
-    {
-      id: 'usr-superadmin',
-      name: 'Sahachara Systems',
-      role: 'SUPER_ADMIN',
-      email: 'systems@sahachara.com',
-      icon: Shield
-    },
-    {
-      id: 'usr-admin',
-      name: 'Marcus Sterling',
-      role: 'ADMIN',
-      email: 'admin.ops@sahachara.com',
-      icon: Shield
-    },
-    {
-      id: 'usr-doc',
-      name: 'Dr. Sarah Chen, MD',
-      role: 'DOCTOR',
-      email: 'sarah.chen@sahachara.com',
-      icon: Stethoscope
-    },
-    {
-      id: 'usr-reception',
-      name: 'Kavita Sharma',
-      role: 'RECEPTIONIST',
-      email: 'receptionist@sahachara.com',
-      icon: Users
-    },
-    {
-      id: 'usr-pharma',
-      name: 'Rajesh Nair, RPh',
-      role: 'PHARMACIST',
-      email: 'pharmacist@sahachara.com',
-      icon: Pill
-    },
-    {
-      id: 'usr-accountant',
-      name: 'Anand Pillai',
-      role: 'ACCOUNTANT',
-      email: 'accountant@sahachara.com',
-      icon: Receipt
-    }
-  ];
-
-  const handleQuickPersonaSelect = (email: string) => {
-    setLoginEmail(email);
-    setLoginPassword('');
-    setMode('login');
-    setErrorMessage(null);
-  };
-
   return (
     <div className="min-h-screen w-full flex flex-col justify-between bg-white font-sans select-none overflow-x-hidden">
       {/* Main Split Section */}

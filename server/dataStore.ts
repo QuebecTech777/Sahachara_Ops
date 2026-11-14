@@ -1,7 +1,6 @@
 import {
   Patient,
   TriageRecord,
-  Bed,
   Doctor,
   Appointment,
   AppointmentReminder,
@@ -30,7 +29,6 @@ import {
 import {
   INITIAL_PATIENTS,
   INITIAL_TRIAGE,
-  INITIAL_BEDS,
   INITIAL_DOCTORS,
   INITIAL_APPOINTMENTS,
   INITIAL_REMINDERS,
@@ -56,7 +54,6 @@ import {
 class HospitalDataStore {
   patients: Patient[] = [...INITIAL_PATIENTS];
   triageRecords: TriageRecord[] = [...INITIAL_TRIAGE];
-  beds: Bed[] = [...INITIAL_BEDS];
   doctors: Doctor[] = [...INITIAL_DOCTORS];
   appointments: Appointment[] = [...INITIAL_APPOINTMENTS];
   reminders: AppointmentReminder[] = [...INITIAL_REMINDERS];
@@ -83,8 +80,6 @@ class HospitalDataStore {
 
   getMetrics(): HospitalOverviewMetrics {
     const activePatients = this.patients.filter((p) => !p.deletedAt);
-    const occupied = this.beds.filter((b) => b.status === 'occupied').length;
-    const total = this.beds.length;
     const criticalLabs = this.labOrders.filter((l) => l.isAbnormal).length;
     const pendingRx = this.prescriptions.filter((p) => p.status === 'pending').length;
     const doctorsOnDuty = this.doctors.filter((d) => d.status === 'on_duty').length;
@@ -95,15 +90,15 @@ class HospitalDataStore {
 
     return {
       totalPatientsToday: activePatients.length,
-      erWaitTimeMinutes: 15,
-      occupiedBeds: occupied,
-      totalBeds: total,
-      occupancyRate: Math.round((occupied / (total || 1)) * 1000) / 10,
+      erWaitTimeMinutes: 0,
+      occupiedBeds: 0,
+      totalBeds: 0,
+      occupancyRate: 0,
       activeDoctorsOnDuty: doctorsOnDuty,
       criticalLabAlerts: criticalLabs,
       pendingPrescriptions: pendingRx,
-      admittedToday: activePatients.filter((p) => p.admissionStatus === 'inpatient' || p.admissionStatus === 'er').length,
-      dischargedToday: activePatients.filter((p) => p.admissionStatus === 'discharged').length,
+      admittedToday: 0,
+      dischargedToday: 0,
       scheduledAppointmentsToday: todayApts,
       activeTreatments: activeTreatmentsCount,
       activePanchakarmaCourses: activePkCount,
