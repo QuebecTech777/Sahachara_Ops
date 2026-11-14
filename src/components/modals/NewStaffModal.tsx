@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserPlus, ShieldCheck, Stethoscope, Clock, Phone, Mail, Award, CheckCircle } from 'lucide-react';
+import { UserPlus, ShieldCheck, Stethoscope, Clock, Phone, Mail, Award, CheckCircle, AlertTriangle } from 'lucide-react';
 import { CarbonModal } from '../carbon/CarbonModal';
 import { CarbonButton } from '../carbon/CarbonButton';
 import { StaffMember, StaffRole } from '../../types/hospital';
@@ -7,7 +7,7 @@ import { StaffMember, StaffRole } from '../../types/hospital';
 interface NewStaffModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (staffData: Partial<StaffMember>) => void;
+  onSubmit: (staffData: Partial<StaffMember>) => Promise<any> | void;
 }
 
 export const NewStaffModal: React.FC<NewStaffModalProps> = ({
@@ -26,6 +26,8 @@ export const NewStaffModal: React.FC<NewStaffModalProps> = ({
   const [qualification, setQualification] = useState('BAMS, MD (Ayurveda)');
   const [status, setStatus] = useState<'on_duty' | 'active' | 'on_leave'>('on_duty');
   const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   // Auto-fill sensible defaults when role changes
   const handleRoleChange = (newRole: StaffRole) => {
@@ -69,24 +71,60 @@ export const NewStaffModal: React.FC<NewStaffModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim()) {
+      setInlineError('Full staff name is mandatory.');
+      return;
+    }
+
+    if (!phone.trim()) {
+      setInlineError('Contact telephone number is mandatory.');
+      return;
+    }
+
+    const cleanPhone = phone.trim();
+    const phoneDigits = cleanPhone.replace(/\D/g, '');
+    const phonePattern = /^\+?[0-9\s\-()]{7,25}$/;
+    if (!phonePattern.test(cleanPhone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+      setInlineError('Contact telephone number must be a valid telephone format (e.g. +91 98450 12345).');
+      return;
+    }
+
+    let cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+      cleanEmail = `${slug || 'staff'}@sahachara.com`;
+    } else if (!cleanEmail.endsWith('@sahachara.com')) {
+      setInlineError('Official Staff Email must belong to the @sahachara.com domain.');
+      return;
+    }
+
     const newStaff: Partial<StaffMember> = {
-      name,
+      name: name.trim(),
       role,
-      designation: designation || `${role} Staff`,
-      department,
-      licenseNumber: licenseNumber || `REG-AY-${Math.floor(1000 + Math.random() * 9000)}`,
-      email: email || `${name.toLowerCase().replace(/[^a-z]/g, '.')}@sahachara.org`,
-      phone: phone || '+91 98450 00000',
+      designation: designation.trim() || `${role} Staff`,
+      department: department.trim() || 'General Clinical Services',
+      licenseNumber: licenseNumber.trim() || `REG-AY-${Math.floor(1000 + Math.random() * 9000)}`,
+      email: cleanEmail,
+      phone: cleanPhone,
       shift,
-      qualification: qualification || 'Qualified Professional',
+      qualification: qualification.trim() || 'Qualified Professional',
       status,
-      notes,
+      notes: notes.trim(),
       joiningDate: new Date().toISOString().split('T')[0]
     };
-    onSubmit(newStaff);
-    onClose();
+
+    setInlineError(null);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(newStaff);
+      onClose();
+    } catch (err: any) {
+      setInlineError(err.message || 'Failed to onboard staff member.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -98,6 +136,12 @@ export const NewStaffModal: React.FC<NewStaffModalProps> = ({
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs text-[#161616]">
+        {inlineError && (
+          <div className="p-3 bg-[#fff1f1] border-l-4 border-[#da1e28] text-xs text-[#da1e28] flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-[#da1e28]" />
+            <span>{inlineError}</span>
+          </div>
+        )}
         {/* Role & Category */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -200,19 +244,22 @@ export const NewStaffModal: React.FC<NewStaffModalProps> = ({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full h-9 px-3 bg-white border border-[#8d8d8d] text-xs text-[#161616] focus:outline-2 focus:outline-[#0f62fe]"
-              placeholder="e.g. radhakrishnan@sahachara.org"
+              placeholder="e.g. radhakrishnan@sahachara.com"
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-[#161616] mb-1">
-              Direct Phone / Extension <span className="text-[#da1e28]">*</span>
+              Contact Telephone Number <span className="text-[#da1e28]">*</span>
             </label>
             <input
-              type="text"
+              type="tel"
               required
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (inlineError) setInlineError(null);
+              }}
               className="w-full h-9 px-3 bg-white border border-[#8d8d8d] font-mono text-xs text-[#161616] focus:outline-2 focus:outline-[#0f62fe]"
               placeholder="e.g. +91 98450 12345"
             />
@@ -290,9 +337,10 @@ export const NewStaffModal: React.FC<NewStaffModalProps> = ({
             kind="primary"
             size="md"
             type="submit"
+            disabled={isSubmitting || !name.trim() || !phone.trim()}
             renderIcon={UserPlus}
           >
-            Confirm & Onboard Staff
+            {isSubmitting ? 'Onboarding...' : 'Confirm & Onboard Staff'}
           </CarbonButton>
         </div>
       </form>

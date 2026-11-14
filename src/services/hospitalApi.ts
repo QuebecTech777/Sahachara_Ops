@@ -1557,11 +1557,22 @@ class HospitalApiClient {
         if (errJson && errJson.message) {
           throw new Error(errJson.message);
         }
+        throw new Error(`Failed to create staff member: HTTP ${res.status}`);
       }
     } catch (err: any) {
       if (err.message && !err.message.includes('fetch')) {
         throw err;
       }
+    }
+
+    if (!data.phone || data.phone.trim() === '') {
+      throw new Error('PhoneRequired: Contact telephone number is mandatory.');
+    }
+    const cleanPhone = data.phone.trim();
+    const phoneDigits = cleanPhone.replace(/\D/g, '');
+    const phonePattern = /^\+?[0-9\s\-()]{7,25}$/;
+    if (!phonePattern.test(cleanPhone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+      throw new Error('InvalidPhone: Contact telephone number must be a valid telephone format (e.g. +91 98450 12345).');
     }
 
     const pin = data.activationPin || Math.floor(1000 + Math.random() * 9000).toString();
@@ -1573,7 +1584,7 @@ class HospitalApiClient {
       designation: data.designation || 'Ayurvedic Medical Officer',
       department: data.department || 'Kayachikitsa (Internal Medicine)',
       email: data.email || `staff.${Date.now()}@sahachara.com`,
-      phone: data.phone || '+91 98450 00000',
+      phone: cleanPhone,
       licenseNumber: data.licenseNumber || null,
       status: (data.status as any) || 'pending_activation',
       activationPin: pin,

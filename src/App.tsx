@@ -673,14 +673,23 @@ export default function App() {
 
   // Staff Directorate Handlers
   const handleAddStaff = async (data: Partial<StaffMember>) => {
-    const created = await hospitalApi.createStaff(data);
-    setNotification({
-      kind: 'success',
-      title: 'Staff Member Onboarded',
-      subtitle: `${created.name} registered as ${created.role} (${created.department})`
-    });
-    await refreshData();
-    return created;
+    try {
+      const created = await hospitalApi.createStaff(data);
+      setNotification({
+        kind: 'success',
+        title: 'Staff Member Onboarded',
+        subtitle: `${created.name} registered as ${created.role} (${created.department})`
+      });
+      await refreshData();
+      return created;
+    } catch (err: any) {
+      setNotification({
+        kind: 'error',
+        title: 'Staff Onboarding Failed',
+        subtitle: err.message || 'Unable to onboard staff member.'
+      });
+      throw err;
+    }
   };
 
   const handleUpdateStaffStatus = async (id: string, status: StaffMember['status']) => {

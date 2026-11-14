@@ -1936,6 +1936,7 @@ apiRouter.post('/staff', requireRole(['SUPER_ADMIN', 'ADMIN']), async (req: Auth
       err.message.includes('InvalidDomain') ||
       err.message.includes('NameRequired') ||
       err.message.includes('PhoneRequired') ||
+      err.message.includes('InvalidPhone') ||
       err.message.includes('DepartmentRequired') ||
       err.message.includes('DesignationRequired')
     ) {
@@ -1962,6 +1963,15 @@ apiRouter.patch('/staff/:id', requireRole(['SUPER_ADMIN', 'ADMIN']), async (req:
     }
     if (err.message.includes('StaffNotFound')) {
       return res.status(404).json({ success: false, error: 'StaffNotFound', message: err.message });
+    }
+    if (
+      err.message.includes('PhoneRequired') ||
+      err.message.includes('InvalidPhone') ||
+      err.message.includes('NameRequired') ||
+      err.message.includes('DepartmentRequired') ||
+      err.message.includes('DesignationRequired')
+    ) {
+      return res.status(400).json({ success: false, error: 'ValidationError', message: err.message });
     }
     res.status(500).json({ success: false, error: 'StaffUpdateError', message: err.message });
   }

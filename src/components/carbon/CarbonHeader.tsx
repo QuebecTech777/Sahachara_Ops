@@ -351,15 +351,16 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
                     if (onSignOut) {
                       onSignOut();
                     } else {
-                      onNavigate('overview');
+                      onNavigate('login');
                     }
                   }}
                   className="w-full h-10 px-3 bg-[#da1e28] hover:bg-[#ba1b23] active:bg-[#750e13] text-white text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer rounded-none shadow-sm mb-3 group"
                   title="Sign Out of Session Immediately"
+                  aria-label="Log Out"
                 >
                   <div className="flex items-center gap-2">
                     <LogOut className="w-4 h-4 text-white shrink-0" />
-                    <span className="font-semibold tracking-[0.16px]">Log Out / Sign Out</span>
+                    <span className="font-semibold tracking-[0.16px]">Log Out</span>
                   </div>
                   <span className="text-[10px] font-mono uppercase tracking-wider text-white/90 bg-black/20 px-1.5 py-0.5 border border-white/20">
                     Exit
@@ -425,8 +426,8 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
                   </div>
                 </div>
 
-                {/* 4. Profile & Settings Link */}
-                <div className="border-t border-[#393939] pt-2">
+                {/* 4. Profile & Settings Link and Bottom Log Out Button */}
+                <div className="border-t border-[#393939] pt-2 space-y-1">
                   <button
                     onClick={() => {
                       onNavigate('settings');
@@ -436,6 +437,29 @@ export const CarbonHeader: React.FC<CarbonHeaderProps> = ({
                   >
                     <span>My Profile & Security Settings</span>
                     <Key className="w-3.5 h-3.5 text-[#8d8d8d]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      if (onSignOut) {
+                        onSignOut();
+                      } else {
+                        onNavigate('login');
+                      }
+                    }}
+                    className="w-full px-2.5 py-2 text-left text-xs font-medium text-[#ff8389] hover:bg-[#da1e28] hover:text-white flex items-center justify-between transition-colors cursor-pointer rounded-none group"
+                    title="Log Out of Sahachara Ops"
+                    aria-label="Log Out"
+                  >
+                    <div className="flex items-center gap-2">
+                      <LogOut className="w-3.5 h-3.5 shrink-0 text-[#ff8389] group-hover:text-white" />
+                      <span className="font-semibold">Log Out</span>
+                    </div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#8d8d8d] group-hover:text-white">
+                      Sign Out
+                    </span>
                   </button>
                 </div>
               </div>

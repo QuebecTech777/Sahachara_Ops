@@ -6751,6 +6751,12 @@ export async function dbCreateStaffMember(
   if (!data.phone || data.phone.trim() === '') {
     throw new Error('PhoneRequired: Contact telephone number is mandatory.');
   }
+  const cleanPhone = data.phone.trim();
+  const phoneDigits = cleanPhone.replace(/\D/g, '');
+  const phonePattern = /^\+?[0-9\s\-()]{7,25}$/;
+  if (!phonePattern.test(cleanPhone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+    throw new Error('InvalidPhone: Contact telephone number must be a valid telephone format (e.g. +91 98450 12345).');
+  }
   if (!data.department || data.department.trim() === '') {
     throw new Error('DepartmentRequired: Hospital department is mandatory.');
   }
@@ -6938,7 +6944,18 @@ export async function dbUpdateStaffMember(
 
   const safeData: any = {};
   if (updates.name !== undefined) safeData.name = updates.name.trim();
-  if (updates.phone !== undefined) safeData.phone = updates.phone.trim();
+  if (updates.phone !== undefined) {
+    if (!updates.phone || updates.phone.trim() === '') {
+      throw new Error('PhoneRequired: Contact telephone number is mandatory.');
+    }
+    const cleanPhone = updates.phone.trim();
+    const phoneDigits = cleanPhone.replace(/\D/g, '');
+    const phonePattern = /^\+?[0-9\s\-()]{7,25}$/;
+    if (!phonePattern.test(cleanPhone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+      throw new Error('InvalidPhone: Contact telephone number must be a valid telephone format (e.g. +91 98450 12345).');
+    }
+    safeData.phone = cleanPhone;
+  }
   if (updates.designation !== undefined) safeData.designation = updates.designation.trim();
   if (updates.department !== undefined) safeData.department = updates.department.trim();
   if (updates.licenseNumber !== undefined) safeData.licenseNumber = updates.licenseNumber?.trim() || null;

@@ -171,8 +171,11 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
   const [isAddStaffModalOpen, setIsAddStaffModalOpen] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<StaffMember['role']>('DOCTOR');
   const [setActiveImmediately, setSetActiveImmediately] = useState(true);
+  const [isSubmittingStaff, setIsSubmittingStaff] = useState(false);
+  const [staffValidationError, setStaffValidationError] = useState<string | null>(null);
   const [pinDialogStaff, setPinDialogStaff] = useState<StaffMember | null>(null);
 
   // ----------------------------------------------------
@@ -1841,35 +1844,95 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
           isOpen={true}
           title="Onboard New Staff Member"
           subtitle="Provision a new physician, therapist, or administrative staff account."
-          onClose={() => setIsAddStaffModalOpen(false)}
-          onRequestSubmit={async () => {
-            if (!newStaffName || !newStaffEmail) {
-              if (onNotify) onNotify('Required Fields Missing', 'Please enter staff name and email address.', 'error');
-              return;
-            }
-            if (onAddStaff) {
-              await onAddStaff({
-                name: newStaffName,
-                email: newStaffEmail,
-                role: newStaffRole,
-                status: setActiveImmediately ? 'active' : 'inactive',
-                department: newStaffRole === 'PHARMACIST' ? 'Ayurvedic Pharmacy' : newStaffRole === 'ACCOUNTANT' ? 'Patient Financial Services' : newStaffRole === 'RECEPTIONIST' ? 'Patient Admissions & Front Desk' : 'Clinical Directorate'
-              });
-            }
+          onClose={() => {
             setIsAddStaffModalOpen(false);
             setNewStaffName('');
             setNewStaffEmail('');
+            setNewStaffPhone('');
+            setStaffValidationError(null);
           }}
-          primaryButtonText="Onboard Staff"
+          onRequestSubmit={async () => {
+            if (!newStaffName.trim() || !newStaffEmail.trim() || !newStaffPhone.trim()) {
+              setStaffValidationError('Full name, official email, and contact telephone number are mandatory.');
+              return;
+            }
+
+            const cleanPhone = newStaffPhone.trim();
+            const rawDigits = cleanPhone.replace(/\D/g, '');
+            const phoneRegex = /^\+?[0-9\s\-()]{7,25}$/;
+            if (!phoneRegex.test(cleanPhone) || rawDigits.length < 7 || rawDigits.length > 15) {
+              setStaffValidationError('Please enter a valid telephone format (e.g. +91 98450 12345).');
+              return;
+            }
+
+            const cleanEmail = newStaffEmail.trim().toLowerCase();
+            if (!cleanEmail.endsWith('@sahachara.com')) {
+              setStaffValidationError('Official staff email must belong to the @sahachara.com domain.');
+              return;
+            }
+
+            setStaffValidationError(null);
+            setIsSubmittingStaff(true);
+
+            try {
+              if (onAddStaff) {
+                const designation =
+                  newStaffRole === 'VAIDYA' ? 'Ayurvedic Physician (Vaidya)' :
+                  newStaffRole === 'DOCTOR' ? 'Consultant Physician' :
+                  newStaffRole === 'PHARMACIST' ? 'Chief Pharmacist' :
+                  newStaffRole === 'ACCOUNTANT' ? 'Patient Accounts Specialist' :
+                  newStaffRole === 'RECEPTIONIST' ? 'Admissions & Front Desk Officer' :
+                  newStaffRole === 'ADMIN' ? 'Hospital Operations Administrator' : 'Executive Governance Director';
+
+                const department =
+                  newStaffRole === 'PHARMACIST' ? 'Ayurvedic Pharmacy' :
+                  newStaffRole === 'ACCOUNTANT' ? 'Patient Financial Services' :
+                  newStaffRole === 'RECEPTIONIST' ? 'Patient Admissions & Front Desk' :
+                  newStaffRole === 'VAIDYA' ? 'Kayachikitsa & Panchakarma' :
+                  newStaffRole === 'ADMIN' || newStaffRole === 'SUPER_ADMIN' ? 'Hospital Operations Administration' : 'Clinical Directorate';
+
+                await onAddStaff({
+                  name: newStaffName.trim(),
+                  email: cleanEmail,
+                  phone: cleanPhone,
+                  role: newStaffRole,
+                  status: setActiveImmediately ? 'active' : 'inactive',
+                  department,
+                  designation
+                });
+              }
+              setIsAddStaffModalOpen(false);
+              setNewStaffName('');
+              setNewStaffEmail('');
+              setNewStaffPhone('');
+              setStaffValidationError(null);
+            } catch (err: any) {
+              setStaffValidationError(err.message || 'Failed to onboard staff member.');
+            } finally {
+              setIsSubmittingStaff(false);
+            }
+          }}
+          primaryButtonText={isSubmittingStaff ? 'Onboarding...' : 'Onboard Staff'}
+          primaryButtonDisabled={isSubmittingStaff}
           secondaryButtonText="Cancel"
         >
           <div className="space-y-4 text-xs">
+            {staffValidationError && (
+              <div className="p-3 bg-[#fff1f1] border-l-4 border-[#da1e28] text-xs text-[#da1e28] flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-[#da1e28]" />
+                <span>{staffValidationError}</span>
+              </div>
+            )}
+
             <div>
               <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">Full Name *</label>
               <input
                 type="text"
                 value={newStaffName}
-                onChange={(e) => setNewStaffName(e.target.value)}
+                onChange={(e) => {
+                  setNewStaffName(e.target.value);
+                  if (staffValidationError) setStaffValidationError(null);
+                }}
                 placeholder="Dr. Anand Krishnan, BAMS"
                 className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
               />
@@ -1880,9 +1943,28 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
               <input
                 type="email"
                 value={newStaffEmail}
-                onChange={(e) => setNewStaffEmail(e.target.value)}
-                placeholder="a.krishnan@sahachara.org"
+                onChange={(e) => {
+                  setNewStaffEmail(e.target.value);
+                  if (staffValidationError) setStaffValidationError(null);
+                }}
+                placeholder="a.krishnan@sahachara.com"
                 className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono uppercase text-[#525252] mb-1">
+                Contact Telephone Number *
+              </label>
+              <input
+                type="tel"
+                value={newStaffPhone}
+                onChange={(e) => {
+                  setNewStaffPhone(e.target.value);
+                  if (staffValidationError) setStaffValidationError(null);
+                }}
+                placeholder="e.g. +91 98450 12345"
+                className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs font-mono"
               />
             </div>
 
@@ -1893,6 +1975,7 @@ export const SettingsWorkspaceView: React.FC<SettingsWorkspaceViewProps> = ({
                 onChange={(e) => setNewStaffRole(e.target.value as any)}
                 className="w-full h-10 min-h-[40px] px-3 bg-[#f4f4f4] border border-[#8d8d8d] focus:bg-white focus:border-[#0f62fe] outline-none text-xs cursor-pointer"
               >
+                <option value="VAIDYA">VAIDYA</option>
                 <option value="DOCTOR">DOCTOR</option>
                 <option value="RECEPTIONIST">RECEPTIONIST</option>
                 <option value="PHARMACIST">PHARMACIST</option>

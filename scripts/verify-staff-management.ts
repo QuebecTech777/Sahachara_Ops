@@ -272,9 +272,45 @@ async function runStaffManagementSuite() {
         department: 'Internal Medicine',
         designation: 'Physician'
       });
-      assert(noPhone.status === 400, 'Creation without phone rejected with 400', `Status: ${noPhone.status}`);
+      assert(noPhone.status === 400, 'Creation without phone rejected with 400 PhoneRequired', `Status: ${noPhone.status}`);
+      assert(noPhone.body?.message?.includes('PhoneRequired'), 'Error message identifies PhoneRequired');
 
-      // Successful creation with minimal required fields
+      // Empty / whitespace phone
+      const emptyPhone = await makeRequest(baseUrl, 'POST', '/api/staff', tokens.SUPER_ADMIN, {
+        name: 'Dr. John Doe',
+        email: `john.doe.${Date.now()}@sahachara.com`,
+        role: 'DOCTOR',
+        department: 'Internal Medicine',
+        designation: 'Physician',
+        phone: '   '
+      });
+      assert(emptyPhone.status === 400, 'Creation with whitespace phone rejected with 400 PhoneRequired', `Status: ${emptyPhone.status}`);
+      assert(emptyPhone.body?.message?.includes('PhoneRequired'), 'Whitespace phone returns PhoneRequired error');
+
+      // Invalid phone format (alphabetic)
+      const invalidPhoneAlpha = await makeRequest(baseUrl, 'POST', '/api/staff', tokens.SUPER_ADMIN, {
+        name: 'Dr. John Doe',
+        email: `john.doe.${Date.now()}@sahachara.com`,
+        role: 'DOCTOR',
+        department: 'Internal Medicine',
+        designation: 'Physician',
+        phone: 'invalid-phone-number'
+      });
+      assert(invalidPhoneAlpha.status === 400, 'Creation with non-numeric phone rejected with 400 InvalidPhone', `Status: ${invalidPhoneAlpha.status}`);
+      assert(invalidPhoneAlpha.body?.message?.includes('InvalidPhone'), 'Error message identifies InvalidPhone');
+
+      // Invalid phone format (too short)
+      const invalidPhoneShort = await makeRequest(baseUrl, 'POST', '/api/staff', tokens.SUPER_ADMIN, {
+        name: 'Dr. John Doe',
+        email: `john.doe.${Date.now()}@sahachara.com`,
+        role: 'DOCTOR',
+        department: 'Internal Medicine',
+        designation: 'Physician',
+        phone: '123'
+      });
+      assert(invalidPhoneShort.status === 400, 'Creation with short phone (123) rejected with 400 InvalidPhone', `Status: ${invalidPhoneShort.status}`);
+
+      // Successful creation with minimal required fields & valid telephone
       const staffEmail1 = `dr.meera.${Date.now()}@sahachara.com`;
       const validCreate = await makeRequest(baseUrl, 'POST', '/api/staff', tokens.SUPER_ADMIN, {
         name: 'Dr. Meera Nambiar',
@@ -288,8 +324,27 @@ async function runStaffManagementSuite() {
       assert(Boolean(validCreate.body.staff), 'Response contains staff object');
       assert(validCreate.body.staff.employeeId.startsWith('STF-'), 'Assigned sequence employeeId', `ID: ${validCreate.body.staff.employeeId}`);
       assert(validCreate.body.staff.status === 'pending_activation', 'Staff initial status is pending_activation');
+      assert(validCreate.body.staff.phone === '+91 98765 11111', 'Staff response contains exact submitted phone');
       assert(Boolean(validCreate.body.activationPin), 'Response returns activation PIN exactly once');
       assert(validCreate.body.activationPin.length === 4, 'Activation PIN is exactly 4 digits');
+
+      // Successful creation with international phone format
+      const staffEmailIntl = `dr.intl.${Date.now()}@sahachara.com`;
+      const validIntlCreate = await makeRequest(baseUrl, 'POST', '/api/staff', tokens.SUPER_ADMIN, {
+        name: 'Dr. Arthur Conan',
+        email: staffEmailIntl,
+        role: 'DOCTOR',
+        department: 'Emergency & Acute Care',
+        designation: 'Consultant Physician',
+        phone: '+1 202 555 0199'
+      });
+      assert(validIntlCreate.status === 201, 'Staff creation with international phone (+1 202 555 0199) succeeded (201)', `Status: ${validIntlCreate.status}`);
+      assert(validIntlCreate.body.staff.phone === '+1 202 555 0199', 'International phone preserved in response');
+
+      const dbIntlRecord = await prisma.staffMember.findUnique({
+        where: { id: validIntlCreate.body.staff.id }
+      });
+      assert(dbIntlRecord?.phone === '+1 202 555 0199', 'International phone accurately persisted in PostgreSQL');
 
       // Database inspection: verify NULL for optional fields (no fabricated defaults)
       const dbRecord = await prisma.staffMember.findUnique({
@@ -458,6 +513,26 @@ async function runStaffManagementSuite() {
       assert(patchedStaff.phone === '+91 99999 77777', 'Phone updated correctly');
       assert(patchedStaff.address === '123 Hospital Road, Kochi', 'Address updated correctly');
       assert(patchedStaff.specialty === 'Clinical Neurophysiology', 'Specialty updated correctly');
+
+      // Attempt invalid phone update via PATCH (empty)
+      const emptyPhonePatch = await makeRequest(baseUrl, 'PATCH', `/api/staff/${staffId}`, tokens.SUPER_ADMIN, {
+        phone: '   '
+      });
+      assert(emptyPhonePatch.status === 400, 'Update with empty phone rejected with 400 PhoneRequired', `Status: ${emptyPhonePatch.status}`);
+
+      // Attempt invalid phone update via PATCH (non-numeric / invalid format)
+      const invalidPhonePatch = await makeRequest(baseUrl, 'PATCH', `/api/staff/${staffId}`, tokens.SUPER_ADMIN, {
+        phone: 'invalid-tel-string'
+      });
+      assert(invalidPhonePatch.status === 400, 'Update with invalid phone format rejected with 400 InvalidPhone', `Status: ${invalidPhonePatch.status}`);
+
+      // Update with valid international telephone format
+      const intlPhonePatch = await makeRequest(baseUrl, 'PATCH', `/api/staff/${staffId}`, tokens.SUPER_ADMIN, {
+        phone: '+44 20 7946 0991'
+      });
+      assert(intlPhonePatch.status === 200, 'Update with international phone format (+44 20 7946 0991) succeeded with 200');
+      const rePatchedStaff = await prisma.staffMember.findUnique({ where: { id: staffId } });
+      assert(rePatchedStaff?.phone === '+44 20 7946 0991', 'International phone accurately updated in PostgreSQL');
 
       // Anti-Mass-Assignment: attempt to mutate role, status, employeeId, email via PATCH /api/staff/:id
       const massAssignRes = await makeRequest(baseUrl, 'PATCH', `/api/staff/${staffId}`, tokens.SUPER_ADMIN, {

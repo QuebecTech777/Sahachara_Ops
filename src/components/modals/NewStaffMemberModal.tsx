@@ -9,7 +9,8 @@ import {
   Award,
   CheckCircle,
   Building2,
-  FileText
+  FileText,
+  AlertTriangle
 } from 'lucide-react';
 import { CarbonModal } from '../carbon/CarbonModal';
 import { CarbonButton } from '../carbon/CarbonButton';
@@ -18,7 +19,7 @@ import { StaffMember, StaffRole } from '../../types/hospital';
 interface NewStaffMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (staffData: Partial<StaffMember>) => void;
+  onSubmit: (staffData: Partial<StaffMember>) => Promise<any> | void;
 }
 
 export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
@@ -37,6 +38,8 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
   const [qualification, setQualification] = useState('BAMS, MD (Ayurveda)');
   const [status, setStatus] = useState<'on_duty' | 'active' | 'on_leave'>('on_duty');
   const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   // Department presets for quick select
   const commonDepartments = [
@@ -97,16 +100,32 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
 
   const [pinNotice, setPinNotice] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      setInlineError('Full staff name is mandatory.');
+      return;
+    }
+
+    if (!phone.trim()) {
+      setInlineError('Contact telephone number is mandatory.');
+      return;
+    }
+
+    const cleanPhone = phone.trim();
+    const phoneDigits = cleanPhone.replace(/\D/g, '');
+    const phonePattern = /^\+?[0-9\s\-()]{7,25}$/;
+    if (!phonePattern.test(cleanPhone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+      setInlineError('Contact telephone number must be a valid telephone format (e.g. +91 98450 12345).');
+      return;
+    }
 
     let cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
       const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
       cleanEmail = `${slug || 'staff'}@sahachara.com`;
     } else if (!cleanEmail.endsWith('@sahachara.com')) {
-      alert('Official Staff Email must belong to the @sahachara.com domain.');
+      setInlineError('Official Staff Email must belong to the @sahachara.com domain.');
       return;
     }
 
@@ -119,7 +138,7 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
       department: department.trim() || 'General Clinical Services',
       licenseNumber: licenseNumber.trim() || `REG-AY-${Math.floor(1000 + Math.random() * 9000)}`,
       email: cleanEmail,
-      phone: phone.trim() || '+91 98450 00000',
+      phone: cleanPhone,
       shift,
       qualification: qualification.trim() || 'Qualified Professional',
       status: 'pending_activation',
@@ -127,8 +146,17 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
       notes: notes.trim(),
       joiningDate: new Date().toISOString().split('T')[0]
     };
-    onSubmit(newStaff);
-    onClose();
+
+    setInlineError(null);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(newStaff);
+      onClose();
+    } catch (err: any) {
+      setInlineError(err.message || 'Failed to onboard personnel.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -140,6 +168,12 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs text-[#161616]">
+        {inlineError && (
+          <div className="p-3 bg-[#fff1f1] border-l-4 border-[#da1e28] text-xs text-[#da1e28] flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-[#da1e28]" />
+            <span>{inlineError}</span>
+          </div>
+        )}
         {/* Role & Name */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -238,14 +272,18 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
 
             <div>
               <label className="block text-[10px] font-medium uppercase text-[#525252] mb-1">
-                Direct Contact Phone
+                Contact Telephone Number <span className="text-[#da1e28]">*</span>
               </label>
               <div className="relative">
                 <input
                   type="tel"
+                  required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98450 XXXXX"
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (inlineError) setInlineError(null);
+                  }}
+                  placeholder="e.g. +91 98450 12345"
                   className="w-full bg-white border border-[#8d8d8d] px-3 py-2 text-xs text-[#161616] focus:outline-hidden focus:border-[#0f62fe] rounded-none pl-8 font-mono"
                 />
                 <Phone className="w-3.5 h-3.5 text-[#8d8d8d] absolute left-2.5 top-2.5" />
@@ -336,8 +374,13 @@ export const NewStaffMemberModal: React.FC<NewStaffMemberModalProps> = ({
           <CarbonButton variant="secondary" size="md" onClick={onClose} type="button">
             Cancel
           </CarbonButton>
-          <CarbonButton variant="primary" size="md" type="submit" disabled={!name.trim()}>
-            <UserPlus className="w-4 h-4 mr-1.5 inline" /> Onboard Personnel
+          <CarbonButton
+            variant="primary"
+            size="md"
+            type="submit"
+            disabled={isSubmitting || !name.trim() || !phone.trim()}
+          >
+            <UserPlus className="w-4 h-4 mr-1.5 inline" /> {isSubmitting ? 'Onboarding...' : 'Onboard Personnel'}
           </CarbonButton>
         </div>
       </form>
