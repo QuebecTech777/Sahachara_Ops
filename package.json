@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx scripts/verify-rbac.ts && tsx scripts/verify-implementation.ts && tsx scripts/verify-pharmacy-price.ts && tsx scripts/verify-patient-management.ts && tsx scripts/verify-appointments-reception.ts && tsx scripts/verify-clinical-operations.ts && tsx scripts/verify-pharmacy-dispensing.ts && tsx scripts/verify-financial-operations.ts && tsx scripts/verify-staff-management.ts && tsx scripts/verify-ayush-credentials.ts && tsx scripts/verify-staff-activation-pin.ts",
+    "test": "tsx scripts/verify-rbac.ts && tsx scripts/verify-implementation.ts && tsx scripts/verify-pharmacy-price.ts && tsx scripts/verify-patient-management.ts && tsx scripts/verify-appointments-reception.ts && tsx scripts/verify-clinical-operations.ts && tsx scripts/verify-pharmacy-dispensing.ts && tsx scripts/verify-financial-operations.ts && tsx scripts/verify-staff-management.ts && tsx scripts/verify-ayush-credentials.ts && tsx scripts/verify-staff-activation-pin.ts && tsx scripts/verify-observability.ts",
+    "test:observability": "tsx scripts/verify-observability.ts",
     "test:rbac": "tsx scripts/verify-rbac.ts",
     "test:impl": "tsx scripts/verify-implementation.ts",
     "test:pharmacy": "tsx scripts/verify-pharmacy-price.ts",
@@ -29,6 +30,9 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@logtail/browser": "^0.6.1",
+    "@logtail/node": "^0.6.1",
+    "@newrelic/browser-agent": "^1.324.1",
     "@prisma/client": "^6.4.1",
     "@supabase/supabase-js": "^2.119.0",
     "@tailwindcss/vite": "^4.3.3",
@@ -43,6 +47,7 @@
     "jspdf-autotable": "^5.0.9",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "newrelic": "^14.12.0",
     "prisma": "^6.4.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
@@ -50,6 +55,7 @@
     "vite": "^8.3.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -57,7 +63,9 @@
     "esbuild": "^0.28.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2",
-    "@types/express": "^4.17.21"
+    "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2"
   }
 }
