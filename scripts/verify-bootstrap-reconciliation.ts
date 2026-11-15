@@ -107,27 +107,34 @@ async function main() {
   execSync(`psql -U highflyer -d postgres -c "DROP DATABASE ${TEST_DB_NAME} WITH (FORCE);"`, { stdio: 'ignore' });
   console.log('   ✓ Test database dropped cleanly.\n');
 
-  // 6. Audit production Supabase database
-  console.log('6. Auditing target Supabase production database state...');
-  const prodPrisma = new PrismaClient();
-  const [prodUsers, prodTariffs, prodProfiles, prodMigrations] = await Promise.all([
-    prodPrisma.user.count(),
-    prodPrisma.hospitalTariff.count(),
-    prodPrisma.hospitalProfile.count(),
-    prodPrisma.$queryRaw<[{ c: number }]>`SELECT count(*)::int as c FROM _prisma_migrations;`
-  ]);
+  // 6. Audit production database state (skipped in CI)
+  const isCI = process.env.CI === 'true';
+  const prodDbUrl = process.env.PROD_DATABASE_URL;
+  if (isCI || !prodDbUrl || prodDbUrl.includes('test_db')) {
+    console.log('6. [SKIPPED] Production database probe skipped: isolated CI/test environment (zero production database access).\n');
+  } else {
+    console.log('6. Auditing target production database state...');
+    const prodPrisma = new PrismaClient({ datasources: { db: { url: prodDbUrl } } });
+    const [prodUsers, prodTariffs, prodProfiles, prodMigrations] = await Promise.all([
+      prodPrisma.user.count(),
+      prodPrisma.hospitalTariff.count(),
+      prodPrisma.hospitalProfile.count(),
+      prodPrisma.$queryRaw<[{ c: number }]>`SELECT count(*)::int as c FROM _prisma_migrations;`
+    ]);
 
-  console.log(`   - Users: ${prodUsers} (strictly 0)`);
-  console.log(`   - Hospital Tariffs: ${prodTariffs} (strictly 0)`);
-  console.log(`   - Hospital Profiles: ${prodProfiles} (strictly 1)`);
-  console.log(`   - Migrations: ${prodMigrations[0].c} (strictly 23)`);
+    console.log(`   - Users: ${prodUsers} (strictly 0)`);
+    console.log(`   - Hospital Tariffs: ${prodTariffs} (strictly 0)`);
+    console.log(`   - Hospital Profiles: ${prodProfiles} (strictly 1)`);
+    console.log(`   - Migrations: ${prodMigrations[0].c} (strictly 23)`);
 
-  if (prodUsers !== 0 || prodTariffs !== 0 || prodProfiles !== 1 || prodMigrations[0].c !== 23) {
-    throw new Error('FAIL: Target Supabase production database state has drifted!');
+    if (prodUsers !== 0 || prodTariffs !== 0 || prodProfiles !== 1 || prodMigrations[0].c !== 23) {
+      await prodPrisma.$disconnect();
+      throw new Error('FAIL: Target production database state has drifted!');
+    }
+    console.log('   ✓ Target production database confirmed 100% UNCHANGED.\n');
+
+    await prodPrisma.$disconnect();
   }
-  console.log('   ✓ Target Supabase production database confirmed 100% UNCHANGED.\n');
-
-  await prodPrisma.$disconnect();
 
   console.log('======================================================================');
   console.log('   FINAL BOOTSTRAP RECONCILIATION: ALL CHECKS PASSED (0 DEFECTS)     ');

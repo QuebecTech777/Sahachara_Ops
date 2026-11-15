@@ -27,8 +27,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 
-const PROD_DB_URL = 'postgresql://highflyer@localhost:5432/sahachara_ops_db';
-const TEST_DB_URL = process.env.TEST_DATABASE_URL || 'postgresql://highflyer@localhost:5432/sahachara_ops_test_db';
+const TEST_DB_URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || 'postgresql://highflyer@localhost:5432/sahachara_ops_test_db';
 
 if (process.env.DATABASE_URL?.includes('sahachara_ops_db') && process.env.TEST_DATABASE_URL?.includes('sahachara_ops_db')) {
   console.error('\nFATAL: Tests must not run against production database! Aborting.\n');

@@ -5,7 +5,7 @@ import { PrismaClient } from '@prisma/client';
 // ---------------------------------------------------------------------------
 // TEST DATABASE ISOLATION GUARD
 // ---------------------------------------------------------------------------
-const PROD_DB_URL = 'postgresql://highflyer@localhost:5432/sahachara_ops_db';
+const PROD_DB_URL = process.env.PROD_DATABASE_URL;
 const TEST_DB_URL = process.env.TEST_DATABASE_URL || 'postgresql://highflyer@localhost:5432/sahachara_ops_test_db';
 
 if (process.env.DATABASE_URL?.includes('sahachara_ops_db') && process.env.TEST_DATABASE_URL?.includes('sahachara_ops_db')) {
@@ -29,11 +29,13 @@ import {
 import { generateSessionToken, registerActiveUserChecker } from '../server/rbacMiddleware.ts';
 import { DepartmentDiscipline } from '@prisma/client';
 
-const prodProbePrisma = new PrismaClient({
-  datasources: { db: { url: PROD_DB_URL } }
-});
+const isCI = process.env.CI === 'true';
+const prodProbePrisma = !isCI && PROD_DB_URL && !PROD_DB_URL.includes('test_db')
+  ? new PrismaClient({ datasources: { db: { url: PROD_DB_URL } } })
+  : null;
 
 async function getProductionDbStats() {
+  if (!prodProbePrisma) return null;
   const [users, patients, appointments, prescriptions, dispensingRecords, invoices, payments, refundRequests, staffMembers, tariffs] = await Promise.all([
     prodProbePrisma.user.count(),
     prodProbePrisma.patient.count(),
@@ -77,7 +79,11 @@ async function runStage3bVerification() {
 
   const prodPre = await getProductionDbStats();
   console.log('✓ Isolated Test Database Connected:', TEST_DB_URL.split('/').pop());
-  console.log('✓ Production Database Pre-Test State Snapshot:', prodPre);
+  if (prodPre) {
+    console.log('✓ Production Database Pre-Test State Snapshot:', prodPre);
+  } else {
+    console.log('ℹ [SKIPPED] Production database probe skipped: isolated CI/test environment (zero production database access).');
+  }
 
   // Spin up test server
   const app = express();
@@ -413,7 +419,7 @@ async function runStage3bVerification() {
 
   // 3.4.1 Department Discipline Filter Validation (GET /api/departments?discipline=...)
   console.log('\n▶ 3.4.1 DEPARTMENT DISCIPLINE FILTER VALIDATION (GET /api/departments?discipline=...)');
-  
+
   // Verify all 4 permitted values are accepted
   for (const disc of permittedDisciplines) {
     const filterRes = await api('GET', `/departments?discipline=${disc}`, 'DOCTOR');
@@ -632,19 +638,23 @@ async function runStage3bVerification() {
   // 6. PRODUCTION ZERO-MUTATION VERIFICATION
   // ============================================================================
   console.log('\n▶ 6. PRODUCTION DATABASE ZERO-MUTATION VERIFICATION');
-  const prodPost = await getProductionDbStats();
-  console.log('  Final Production DB Snapshot:', prodPost);
+  if (prodProbePrisma && prodPre) {
+    const prodPost = await getProductionDbStats();
+    console.log('  Final Production DB Snapshot:', prodPost);
 
-  assert(prodPre.users === prodPost.users && prodPost.users === 1, 'Production users strictly 1');
-  assert(prodPost.patients === 0, 'Production patients count strictly 0');
-  assert(prodPost.appointments === 0, 'Production appointments count strictly 0');
-  assert(prodPost.prescriptions === 0, 'Production prescriptions count strictly 0');
-  assert(prodPost.dispensingRecords === 0, 'Production dispensingRecords count strictly 0');
-  assert(prodPost.invoices === 0, 'Production invoices count strictly 0');
-  assert(prodPost.payments === 0, 'Production payments count strictly 0');
-  assert(prodPost.refundRequests === 0, 'Production refundRequests count strictly 0');
-  assert(prodPost.staffMembers === 0, 'Production staffMembers count strictly 0');
-  assert(prodPost.tariffs === prodPre.tariffs, `Production tariffs count strictly unchanged (${prodPost.tariffs} === ${prodPre.tariffs})`);
+    assert(prodPre.users === prodPost!.users && prodPost!.users === 1, 'Production users strictly 1');
+    assert(prodPost!.patients === 0, 'Production patients count strictly 0');
+    assert(prodPost!.appointments === 0, 'Production appointments count strictly 0');
+    assert(prodPost!.prescriptions === 0, 'Production prescriptions count strictly 0');
+    assert(prodPost!.dispensingRecords === 0, 'Production dispensingRecords count strictly 0');
+    assert(prodPost!.invoices === 0, 'Production invoices count strictly 0');
+    assert(prodPost!.payments === 0, 'Production payments count strictly 0');
+    assert(prodPost!.refundRequests === 0, 'Production refundRequests count strictly 0');
+    assert(prodPost!.staffMembers === 0, 'Production staffMembers count strictly 0');
+    assert(prodPost!.tariffs === prodPre.tariffs, `Production tariffs count strictly unchanged (${prodPost!.tariffs} === ${prodPre.tariffs})`);
+  } else {
+    console.log('  ℹ [SKIPPED] Production database zero-mutation probe skipped: isolated CI/test environment (zero production database access).');
+  }
 
   // Cleanup test data
   await prisma.staffDepartmentAssignment.deleteMany({
@@ -653,14 +663,14 @@ async function runStage3bVerification() {
   await prisma.staffMember.deleteMany({
     where: { id: { in: [testDoctor.id, otherDoctor.id] } }
   });
-  if (testDoctor.userId) await prisma.user.delete({ where: { id: testDoctor.userId } }).catch(() => {});
-  if (otherDoctor.userId) await prisma.user.delete({ where: { id: otherDoctor.userId } }).catch(() => {});
+  if (testDoctor.userId) await prisma.user.delete({ where: { id: testDoctor.userId } }).catch(() => { });
+  if (otherDoctor.userId) await prisma.user.delete({ where: { id: otherDoctor.userId } }).catch(() => { });
   await prisma.department.deleteMany({
     where: { id: { in: [createdDeptId, secondDeptId, thirdDeptId, ...permittedDeptIds] } }
   });
 
   server.close();
-  await prodProbePrisma.$disconnect();
+  if (prodProbePrisma) await prodProbePrisma.$disconnect().catch(() => { });
   await prisma.$disconnect();
 
   console.log('\n======================================================================');

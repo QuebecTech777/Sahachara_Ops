@@ -59,9 +59,11 @@ jobs:
           echo "=========================================================================="
           exit 1
 
-      - name: Setup Snyk CLI
+      - name: Install Pinned Snyk CLI
         if: steps.check-auth.outputs.configured == 'true'
-        uses: snyk/actions/setup@v3
+        run: |
+          npm install -g snyk@1.1308.4
+          snyk --version
 
       - name: Install Project Dependencies (Strict Lockfile)
         if: steps.check-auth.outputs.configured == 'true'

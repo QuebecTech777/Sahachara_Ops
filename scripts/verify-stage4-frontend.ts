@@ -5,7 +5,7 @@ import { PrismaClient } from '@prisma/client';
 // ---------------------------------------------------------------------------
 // TEST DATABASE ISOLATION GUARD
 // ---------------------------------------------------------------------------
-const PROD_DB_URL = 'postgresql://highflyer@localhost:5432/sahachara_ops_db';
+const PROD_DB_URL = process.env.PROD_DATABASE_URL;
 const TEST_DB_URL = process.env.TEST_DATABASE_URL || 'postgresql://highflyer@localhost:5432/sahachara_ops_test_db';
 
 if (process.env.DATABASE_URL?.includes('sahachara_ops_db') && process.env.TEST_DATABASE_URL?.includes('sahachara_ops_db')) {
@@ -28,11 +28,13 @@ import {
 import { generateSessionToken, registerActiveUserChecker } from '../server/rbacMiddleware.ts';
 import { DepartmentDiscipline } from '@prisma/client';
 
-const prodProbePrisma = new PrismaClient({
-  datasources: { db: { url: PROD_DB_URL } }
-});
+const isCI = process.env.CI === 'true';
+const prodProbePrisma = !isCI && PROD_DB_URL && !PROD_DB_URL.includes('test_db')
+  ? new PrismaClient({ datasources: { db: { url: PROD_DB_URL } } })
+  : null;
 
 async function getProductionDbStats() {
+  if (!prodProbePrisma) return null;
   const [users, patients, appointments, prescriptions, dispensingRecords, invoices, payments, refundRequests, staffMembers, tariffs] = await Promise.all([
     prodProbePrisma.user.count(),
     prodProbePrisma.patient.count(),
@@ -80,7 +82,11 @@ async function runStage4FrontendVerification() {
   // Probe Production DB baseline
   const prodStatsBefore = await getProductionDbStats();
   console.log('\n[PROD ISOLATION BASELINE]');
-  console.log('  Production DB state:', JSON.stringify(prodStatsBefore));
+  if (prodStatsBefore) {
+    console.log('  Production DB state:', JSON.stringify(prodStatsBefore));
+  } else {
+    console.log('  ℹ [SKIPPED] Production database baseline probe skipped: isolated CI/test environment (zero production database access).');
+  }
 
   await ensureDefaultDatabaseUsers();
 
@@ -652,20 +658,24 @@ async function runStage4FrontendVerification() {
   // PRODUCTION DATABASE ZERO-MUTATION VERIFICATION
   // ============================================================================
   console.log('\n--- VERIFYING PRODUCTION ZERO-MUTATION POST-TEST ---');
-  const prodStatsAfter = await getProductionDbStats();
-  console.log('  Production DB state after tests:', JSON.stringify(prodStatsAfter));
+  if (prodProbePrisma && prodStatsBefore) {
+    const prodStatsAfter = await getProductionDbStats();
+    console.log('  Production DB state after tests:', JSON.stringify(prodStatsAfter));
 
-  let prodDiffFound = false;
-  for (const [key, beforeVal] of Object.entries(prodStatsBefore)) {
-    const afterVal = (prodStatsAfter as any)[key];
-    if (beforeVal !== afterVal) {
-      prodDiffFound = true;
-      console.error(`  PROD MUTATION DETECTED: Table ${key} changed from ${beforeVal} to ${afterVal}`);
+    let prodDiffFound = false;
+    for (const [key, beforeVal] of Object.entries(prodStatsBefore)) {
+      const afterVal = (prodStatsAfter as any)[key];
+      if (beforeVal !== afterVal) {
+        prodDiffFound = true;
+        console.error(`  PROD MUTATION DETECTED: Table ${key} changed from ${beforeVal} to ${afterVal}`);
+      }
     }
+    assert(!prodDiffFound, 'Production database (sahachara_ops_db) suffered ZERO mutations across all tests');
+  } else {
+    console.log('  ℹ [SKIPPED] Production database zero-mutation audit skipped: isolated CI/test environment (zero production database access).');
   }
-  assert(!prodDiffFound, 'Production database (sahachara_ops_db) suffered ZERO mutations across all tests');
 
-  await prodProbePrisma.$disconnect();
+  if (prodProbePrisma) await prodProbePrisma.$disconnect().catch(() => {});
   await prisma.$disconnect();
 
   console.log('\n================================================================================');

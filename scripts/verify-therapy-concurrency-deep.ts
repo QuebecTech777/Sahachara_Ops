@@ -14,7 +14,7 @@
  */
 
 const TEST_DB_URL = process.env.TEST_DATABASE_URL || 'postgresql://highflyer@localhost:5432/sahachara_ops_test_db';
-const PROD_DB_URL = process.env.DATABASE_URL || 'postgresql://highflyer@localhost:5432/sahachara_ops_db';
+const PROD_DB_URL = process.env.PROD_DATABASE_URL;
 
 process.env.DATABASE_URL = TEST_DB_URL;
 process.env.ENABLE_TEST_ACCOUNTS = 'true';
@@ -28,7 +28,10 @@ import { apiRouter } from '../server/routes.ts';
 import { UserRole } from '../src/types/hospital.ts';
 
 const prisma = new PrismaClient({ datasources: { db: { url: TEST_DB_URL } } });
-const prodProbePrisma = new PrismaClient({ datasources: { db: { url: PROD_DB_URL } } });
+const isCI = process.env.CI === 'true';
+const prodProbePrisma = !isCI && PROD_DB_URL && !PROD_DB_URL.includes('test_db')
+  ? new PrismaClient({ datasources: { db: { url: PROD_DB_URL } } })
+  : null;
 
 const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
@@ -114,10 +117,14 @@ async function main() {
     // SECTION 1: PRODUCTION DB FREEZE VERIFICATION
     // -------------------------------------------------------------------------
     console.log(`${BOLD}SECTION 1: Production Database Isolation Verification${RESET}`);
-    const prodMigrations = await prodProbePrisma.$queryRaw<any[]>`
-      SELECT migration_name FROM _prisma_migrations WHERE rolled_back_at IS NULL;
-    `;
-    assert(prodMigrations.length === 19, `Production db strictly frozen at 19 migrations (Found: ${prodMigrations.length})`);
+    if (prodProbePrisma) {
+      const prodMigrations = await prodProbePrisma.$queryRaw<any[]>`
+        SELECT migration_name FROM _prisma_migrations WHERE rolled_back_at IS NULL;
+      `;
+      assert(prodMigrations.length === 19, `Production db strictly frozen at 19 migrations (Found: ${prodMigrations.length})`);
+    } else {
+      console.log('  ℹ [SKIPPED] Production database freeze probe skipped: isolated CI/test environment (zero production database access).');
+    }
 
     // Clean up test sessions in test database
     await prisma.therapySession.deleteMany({});
@@ -545,18 +552,22 @@ async function main() {
     // SECTION 8: FINAL PRODUCTION DB ZERO-MUTATION VERIFICATION
     // -------------------------------------------------------------------------
     console.log(`\n${BOLD}SECTION 8: Final Production DB Zero-Mutation Verification${RESET}`);
-    const finalProdMigrations = await prodProbePrisma.$queryRaw<any[]>`
-      SELECT migration_name FROM _prisma_migrations WHERE rolled_back_at IS NULL;
-    `;
-    assert(finalProdMigrations.length === 19, 'Final check: Production migrations strictly preserved at 19');
-    const finalProdUsers = await prodProbePrisma.user.count();
-    const finalProdInvoices = await prodProbePrisma.invoice.count();
-    assert(finalProdUsers === 1, 'Final check: Production users count strictly 1');
-    assert(finalProdInvoices === 0, 'Final check: Production invoices count strictly 0');
+    if (prodProbePrisma) {
+      const finalProdMigrations = await prodProbePrisma.$queryRaw<any[]>`
+        SELECT migration_name FROM _prisma_migrations WHERE rolled_back_at IS NULL;
+      `;
+      assert(finalProdMigrations.length === 19, 'Final check: Production migrations strictly preserved at 19');
+      const finalProdUsers = await prodProbePrisma.user.count();
+      const finalProdInvoices = await prodProbePrisma.invoice.count();
+      assert(finalProdUsers === 1, 'Final check: Production users count strictly 1');
+      assert(finalProdInvoices === 0, 'Final check: Production invoices count strictly 0');
+    } else {
+      console.log('  ℹ [SKIPPED] Final production database zero-mutation probe skipped: isolated CI/test environment (zero production database access).');
+    }
 
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await prodProbePrisma.$disconnect();
+    if (prodProbePrisma) await prodProbePrisma.$disconnect().catch(() => {});
     await prisma.$disconnect();
   }
 
