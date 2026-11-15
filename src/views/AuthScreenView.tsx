@@ -427,8 +427,8 @@ export const AuthScreenView: React.FC<AuthScreenViewProps> = ({
       </div>
 
       {/* Dark Footer Bar Spanning 100% Width */}
-      <footer className="w-full h-12 bg-[#161616] border-t border-[#262626] flex items-center justify-between px-4 sm:px-8 text-xs text-[#c6c6c6] shrink-0">
-        <div className="flex items-center gap-4 sm:gap-8">
+      <footer className="w-full bg-[#161616] border-t border-[#262626] flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-3 sm:py-0 min-h-[48px] sm:h-12 text-xs text-[#c6c6c6] shrink-0 gap-2.5 sm:gap-0">
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 sm:gap-6 md:gap-8">
           <button
             type="button"
             onClick={onReturnToDashboard}
@@ -453,14 +453,22 @@ export const AuthScreenView: React.FC<AuthScreenViewProps> = ({
           <button
             type="button"
             onClick={onReturnToDashboard}
-            className="hover:text-white transition-colors cursor-pointer hidden sm:inline-block"
+            className="hover:text-white transition-colors cursor-pointer"
           >
             Accessibility
           </button>
         </div>
 
-        <div className="text-xs text-[#c6c6c6]">
-          Powered By <strong className="text-white font-semibold">Quebec Technologies</strong>
+        <div className="text-xs text-[#c6c6c6] text-center sm:text-right">
+          Powered By{' '}
+          <a
+            href="https://quebectechnologies.tech"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white font-semibold hover:underline hover:text-[#78a9ff] transition-colors cursor-pointer inline-flex items-center"
+          >
+            Quebec Technologies
+          </a>
         </div>
       </footer>
     </div>
