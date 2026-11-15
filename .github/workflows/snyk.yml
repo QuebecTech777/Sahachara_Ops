@@ -98,10 +98,18 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           set +e
-          snyk code test --sarif-file-output=snyk-code.sarif --severity-threshold=high
+          CODE_OUTPUT=$(snyk code test --sarif-file-output=snyk-code.sarif --severity-threshold=high 2>&1)
           CODE_EXIT=$?
           set -e
-          echo "code_code=$CODE_EXIT" >> $GITHUB_OUTPUT
+
+          printf '%s\n' "$CODE_OUTPUT"
+          if [ "$CODE_EXIT" -eq 2 ] && printf '%s\n' "$CODE_OUTPUT" | grep -Fq 'SNYK-CODE-0005'; then
+            CODE_RESULT=disabled
+          else
+            CODE_RESULT=$CODE_EXIT
+          fi
+
+          echo "code_code=$CODE_RESULT" >> $GITHUB_OUTPUT
           echo "Snyk Code scan finished with exit code: $CODE_EXIT"
 
       - name: Upload Snyk Code SARIF Results
@@ -150,6 +158,9 @@ jobs:
 
           # Classify Snyk Code (SAST)
           case "$CODE_CODE" in
+            disabled)
+              echo "::notice::Snyk Code is not enabled for this organization; skipping the SAST result."
+              ;;
             0)
               echo "✓ Snyk Code: No high or critical static code defects detected."
               ;;
