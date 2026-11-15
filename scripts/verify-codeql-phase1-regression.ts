@@ -510,7 +510,7 @@ async function runPhase1RegressionSuite() {
 }
 
 runPhase1RegressionSuite().catch((err) => {
-  const cleanMsg = err instanceof Error ? err.message.replace(/[\r\n]+/g, ' ') : String(err).replace(/[\r\n]+/g, ' ');
-  console.error('\nFatal error in Phase 1 regression suite:', cleanMsg);
+  const safeMsg = encodeURIComponent(err instanceof Error ? err.message : String(err));
+  console.error('\nFatal error in Phase 1 regression suite:', safeMsg);
   process.exit(1);
 });

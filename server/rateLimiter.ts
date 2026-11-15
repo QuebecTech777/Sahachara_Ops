@@ -16,7 +16,7 @@
  * - Skips throttling during automated CI / test runs unless explicitly tested.
  */
 
-import rateLimit, { Options } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
 
 const isTestOrCI = process.env.NODE_ENV === 'test' || process.env.CI === 'true';
