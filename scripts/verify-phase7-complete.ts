@@ -1258,13 +1258,7 @@ async function runPhase7VerificationSuite() {
   }
 }
 
-function sanitizeTerminalError(err: unknown): string {
-  const raw = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  return raw.replace(/\r|\n/g, ' ').replace(/[\x00-\x1f\x7f-\x9f]/g, '');
-}
-
-runPhase7VerificationSuite().catch((err) => {
-  const safeMsg = sanitizeTerminalError(err);
-  console.error('\nFatal suite execution error:', safeMsg);
+runPhase7VerificationSuite().catch(() => {
+  console.error('\nFatal error executing Phase 7 verification suite.');
   process.exit(1);
 });
