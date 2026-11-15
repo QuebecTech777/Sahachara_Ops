@@ -46,9 +46,10 @@ Snyk monitors the project's dependency tree (`package-lock.json`) for known comm
 ### Scan Coverage & Failure Classification
 - **Snyk Open Source (SCA):** Scans direct and transitive dependencies against Snyk's vulnerability database using `package-lock.json`. Enforces high and critical severity failure thresholds.
 - **Snyk Code (SAST):** Scans application source code for code-level vulnerabilities.
+- If Snyk Code is not enabled for the organization, the workflow reports `SNYK-CODE-0005` as a skipped scan; all other Snyk Code operational errors still fail the job.
 - **Strict Exit Code Classification:** Distinguishes genuine vulnerabilities from operational or network failures:
   - Exit code `1`: Vulnerability threshold exceeded (high/critical CVE or code vulnerability detected).
-  - Exit code `2`: Operational error (invalid CLI arguments or runner execution defect).
+  - Exit code `2`: Operational error (invalid CLI arguments or runner execution defect), except `SNYK-CODE-0005` for the unavailable Snyk Code feature.
   - Exit code `3`: Configuration error (unsupported target or missing project manifest).
   - Exit code `> 3`: Network, authentication, or upstream Snyk API service outages.
 - **SARIF Upload:** Emits SARIF reports and uploads them to the GitHub Security tab via `github/codeql-action/upload-sarif@v3` only when the output SARIF file is present. Upload errors do not mask underlying scan results.
