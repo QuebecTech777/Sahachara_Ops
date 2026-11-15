@@ -62,18 +62,22 @@ function fail(label: string, detail: string = '') {
   console.error(`  ❌ FAIL: ${label}${detail ? ' — ' + detail : ''}`);
 }
 
-async function post(path: string, body: unknown, token: string) {
+async function post(path: string, body: unknown, token?: string) {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   return fetch(`${BASE_URL}/api${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers,
     body: JSON.stringify(body)
   });
 }
 
-async function patch(path: string, body: unknown, token: string) {
+async function patch(path: string, body: unknown, token?: string) {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   return fetch(`${BASE_URL}/api${path}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers,
     body: JSON.stringify(body)
   });
 }

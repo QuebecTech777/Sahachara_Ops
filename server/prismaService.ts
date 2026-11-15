@@ -1394,6 +1394,110 @@ export async function checkDuplicatePatients(params: {
   return matches;
 }
 
+// ============================================================================
+// STRICT SORT ALLOWLISTS & TYPE-SAFE ORDER RESOLVERS (CODEQL ALERTS #27, #28)
+// ============================================================================
+
+export const ALLOWED_PATIENT_SORT_KEYS = [
+  'createdAt',
+  'updatedAt',
+  'mrn',
+  'firstName',
+  'lastName',
+  'dob',
+  'age',
+  'status',
+  'admissionStatus'
+] as const;
+
+export type AllowedPatientSortKey = typeof ALLOWED_PATIENT_SORT_KEYS[number];
+
+export function resolvePatientSortOrder(
+  requestedSortBy?: string,
+  requestedSortOrder?: string
+): Prisma.PatientOrderByWithRelationInput {
+  const direction: 'asc' | 'desc' = requestedSortOrder?.toLowerCase().trim() === 'asc' ? 'asc' : 'desc';
+  const sanitizedKey = requestedSortBy?.trim();
+  const matchedKey = (ALLOWED_PATIENT_SORT_KEYS as readonly string[]).includes(sanitizedKey || '')
+    ? (sanitizedKey as AllowedPatientSortKey)
+    : 'createdAt';
+
+  switch (matchedKey) {
+    case 'updatedAt':
+      return { updatedAt: direction };
+    case 'mrn':
+      return { mrn: direction };
+    case 'firstName':
+      return { firstName: direction };
+    case 'lastName':
+      return { lastName: direction };
+    case 'dob':
+      return { dob: direction };
+    case 'age':
+      return { age: direction };
+    case 'status':
+      return { status: direction };
+    case 'admissionStatus':
+      return { admissionStatus: direction };
+    case 'createdAt':
+    default:
+      return { createdAt: direction };
+  }
+}
+
+export const ALLOWED_APPOINTMENT_SORT_KEYS = [
+  'dateTime',
+  'appointmentDate',
+  'createdAt',
+  'updatedAt',
+  'appointmentNumber',
+  'patientName',
+  'patientMrn',
+  'practitionerName',
+  'priority',
+  'queuePosition',
+  'status'
+] as const;
+
+export type AllowedAppointmentSortKey = typeof ALLOWED_APPOINTMENT_SORT_KEYS[number];
+
+export function resolveAppointmentSortOrder(
+  requestedSortBy?: string,
+  requestedSortOrder?: string
+): Prisma.AppointmentOrderByWithRelationInput {
+  const direction: 'asc' | 'desc' = requestedSortOrder?.toLowerCase().trim() === 'asc' ? 'asc' : 'desc';
+  const sanitizedKey = requestedSortBy?.trim();
+  const matchedKey = (ALLOWED_APPOINTMENT_SORT_KEYS as readonly string[]).includes(sanitizedKey || '')
+    ? (sanitizedKey as AllowedAppointmentSortKey)
+    : 'dateTime';
+
+  switch (matchedKey) {
+    case 'appointmentDate':
+      return { appointmentDate: direction };
+    case 'createdAt':
+      return { createdAt: direction };
+    case 'updatedAt':
+      return { updatedAt: direction };
+    case 'appointmentNumber':
+      return { appointmentNumber: direction };
+    case 'patientName':
+      return { patientName: direction };
+    case 'patientMrn':
+      return { patientMrn: direction };
+    case 'practitionerName':
+      return { practitionerName: direction };
+    case 'priority':
+      return { priority: direction };
+    case 'queuePosition':
+      return { queuePosition: direction };
+    case 'status':
+      return { status: direction };
+    case 'dateTime':
+    default:
+      return { dateTime: direction };
+  }
+}
+
 export async function dbSearchPatients(options: {
   search?: string;
   status?: string;
@@ -1446,13 +1550,14 @@ export async function dbSearchPatients(options: {
         }
       }
 
+      const orderBy = resolvePatientSortOrder(options.sortBy, options.sortOrder);
       const [total, dbPatients] = await Promise.all([
         prisma.patient.count({ where }),
         prisma.patient.findMany({
           where,
           skip,
           take: limit,
-          orderBy: { [sortBy]: sortOrder }
+          orderBy
         })
       ]);
 
@@ -2317,13 +2422,14 @@ export async function dbGetAppointments(options: {
     ];
   }
 
+  const orderBy = resolveAppointmentSortOrder(options.sortBy, options.sortOrder);
   const [total, dbAppts] = await Promise.all([
     prisma.appointment.count({ where }),
     prisma.appointment.findMany({
       where,
       skip,
       take: limit,
-      orderBy: { [sortBy]: sortOrder }
+      orderBy
     })
   ]);
 
