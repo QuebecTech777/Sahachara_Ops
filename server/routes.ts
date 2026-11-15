@@ -210,10 +210,17 @@ import {
   InvalidSessionStateError,
   UnconfiguredTurnaroundBufferError
 } from './prismaService.ts';
+import {
+  apiGlobalLimiter,
+  authLoginLimiter,
+  therapyAuthReadLimiter,
+  therapyAuthMutateLimiter
+} from './rateLimiter.ts';
 
 export const apiRouter = Router();
 
-// Mount universal authentication context on API routes
+// Mount universal rate limiting and authentication context on API routes
+apiRouter.use(apiGlobalLimiter);
 apiRouter.use(authenticateContext as any);
 
 // ==========================================
@@ -221,7 +228,7 @@ apiRouter.use(authenticateContext as any);
 // ==========================================
 
 // Authenticate staff user (Strictly requires @sahachara.com email)
-apiRouter.post('/auth/login', async (req: Request, res: Response) => {
+apiRouter.post('/auth/login', authLoginLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body || {};
     const result = await authenticateStaffUser(email, password);
@@ -4672,35 +4679,50 @@ apiRouter.get(['/staff-therapy/vaidyas', '/therapy-staff/vaidyas'], requireRole(
   }
 });
 
-apiRouter.get(['/staff-therapy/authorizations', '/staff-therapy-authorizations'], requireRole(['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'VAIDYA', 'RECEPTIONIST']), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const list = await dbGetStaffTherapyAuthorizations(req.query.staffId as string);
-    res.json({ success: true, data: list });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message || 'Failed to query staff authorizations' });
+apiRouter.get(
+  ['/staff-therapy/authorizations', '/staff-therapy-authorizations'],
+  therapyAuthReadLimiter,
+  requireRole(['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'VAIDYA', 'RECEPTIONIST']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const list = await dbGetStaffTherapyAuthorizations(req.query.staffId as string);
+      res.json({ success: true, data: list });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message || 'Failed to query staff authorizations' });
+    }
   }
-});
+);
 
-apiRouter.post(['/staff-therapy/authorizations', '/staff-therapy-authorizations'], requireRole(['SUPER_ADMIN', 'ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const actor = { id: req.userId || 'admin', name: req.userName || 'Administrator', role: req.userRole! };
-    const auth = await dbCreateStaffTherapyAuthorization(req.body.staffId, req.body, actor);
-    res.status(201).json({ success: true, data: auth });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message || 'Failed to create staff therapy authorization' });
+apiRouter.post(
+  ['/staff-therapy/authorizations', '/staff-therapy-authorizations'],
+  therapyAuthMutateLimiter,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const actor = { id: req.userId || 'admin', name: req.userName || 'Administrator', role: req.userRole! };
+      const auth = await dbCreateStaffTherapyAuthorization(req.body.staffId, req.body, actor);
+      res.status(201).json({ success: true, data: auth });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message || 'Failed to create staff therapy authorization' });
+    }
   }
-});
+);
 
-apiRouter.post(['/staff-therapy/authorizations/:id/revoke', '/staff-therapy-authorizations/:id/revoke'], requireRole(['SUPER_ADMIN', 'ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const actor = { id: req.userId || 'admin', name: req.userName || 'Administrator', role: req.userRole! };
-    const reason = req.body.reason || 'Credential expired or revoked';
-    const auth = await dbRevokeStaffTherapyAuthorization(req.params.id, reason, actor);
-    res.json({ success: true, data: auth });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message || 'Failed to revoke staff therapy authorization' });
+apiRouter.post(
+  ['/staff-therapy/authorizations/:id/revoke', '/staff-therapy-authorizations/:id/revoke'],
+  therapyAuthMutateLimiter,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const actor = { id: req.userId || 'admin', name: req.userName || 'Administrator', role: req.userRole! };
+      const reason = req.body.reason || 'Credential expired or revoked';
+      const auth = await dbRevokeStaffTherapyAuthorization(req.params.id, reason, actor);
+      res.json({ success: true, data: auth });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message || 'Failed to revoke staff therapy authorization' });
+    }
   }
-});
+);
 
 // ==========================================
 // 14C. THERAPY SESSIONS SCHEDULING & CONCURRENCY (Phase 7)

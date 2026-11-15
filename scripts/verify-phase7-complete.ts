@@ -1258,7 +1258,7 @@ async function runPhase7VerificationSuite() {
   }
 }
 
-runPhase7VerificationSuite().catch((err) => {
-  console.error('\nFatal suite execution error:', err);
+runPhase7VerificationSuite().catch(() => {
+  console.error('\nFatal error executing Phase 7 verification suite.');
   process.exit(1);
 });

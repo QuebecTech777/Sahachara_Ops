@@ -19,6 +19,7 @@
 
 import http from 'http';
 import express from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 
@@ -910,7 +911,7 @@ async function runStaffManagementSuite() {
       });
       await prisma.staffMember.create({
         data: {
-          employeeId: `STF-2026-${Math.floor(20000 + Math.random() * 80000)}`,
+          employeeId: `STF-2026-${crypto.randomInt(20000, 100000)}`,
           name: 'Suspended Doctor',
           role: 'DOCTOR',
           designation: 'Staff Physician',
@@ -942,7 +943,7 @@ async function runStaffManagementSuite() {
       });
       await prisma.staffMember.create({
         data: {
-          employeeId: `STF-2026-${Math.floor(20000 + Math.random() * 80000)}`,
+          employeeId: `STF-2026-${crypto.randomInt(20000, 100000)}`,
           name: 'Archived Doctor',
           role: 'DOCTOR',
           designation: 'Staff Physician',
@@ -973,7 +974,7 @@ async function runStaffManagementSuite() {
       });
       await prisma.staffMember.create({
         data: {
-          employeeId: `STF-2026-${Math.floor(20000 + Math.random() * 80000)}`,
+          employeeId: `STF-2026-${crypto.randomInt(20000, 100000)}`,
           name: 'Inactive Doctor',
           role: 'DOCTOR',
           designation: 'Staff Physician',
@@ -1064,14 +1065,12 @@ async function runStaffManagementSuite() {
             if (!staff) return { isActive: false, statusReason: 'missing_staff' };
           }
 
-          if (staff) {
-            if (staff.isSuspended || staff.suspendedAt) return { isActive: false, statusReason: 'suspended' };
-            if (staff.archivedAt || staff.status === 'archived') return { isActive: false, statusReason: 'archived' };
-            if (staff.status === 'suspended') return { isActive: false, statusReason: 'suspended' };
-            if (staff.status !== 'active') return { isActive: false, statusReason: 'inactive' };
-            const staffRole = realNormRole(staff.role);
-            if (staffRole !== userRole) return { isActive: false, statusReason: 'role_mismatch' };
-          }
+          if (staff.isSuspended || staff.suspendedAt) return { isActive: false, statusReason: 'suspended' };
+          if (staff.archivedAt || staff.status === 'archived') return { isActive: false, statusReason: 'archived' };
+          if (staff.status === 'suspended') return { isActive: false, statusReason: 'suspended' };
+          if (staff.status !== 'active') return { isActive: false, statusReason: 'inactive' };
+          const staffRole = realNormRole(staff.role);
+          if (staffRole !== userRole) return { isActive: false, statusReason: 'role_mismatch' };
 
           return { isActive: true, currentRole: userRole };
         } catch (err: any) {
@@ -1093,7 +1092,7 @@ async function runStaffManagementSuite() {
       });
       const createdStaffDoc = await prisma.staffMember.create({
         data: {
-          employeeId: `STF-2026-${Math.floor(20000 + Math.random() * 80000)}`,
+          employeeId: `STF-2026-${crypto.randomInt(20000, 100000)}`,
           name: 'Active Then Suspended Doctor',
           role: 'DOCTOR',
           designation: 'Attending Physician',
@@ -1131,7 +1130,7 @@ async function runStaffManagementSuite() {
       });
       const createdStaffDocArch = await prisma.staffMember.create({
         data: {
-          employeeId: `STF-2026-${Math.floor(20000 + Math.random() * 80000)}`,
+          employeeId: `STF-2026-${crypto.randomInt(20000, 100000)}`,
           name: 'Active Then Archived Doctor',
           role: 'DOCTOR',
           designation: 'Attending Physician',
@@ -1175,7 +1174,7 @@ async function runStaffManagementSuite() {
       });
       const promoStaff = await prisma.staffMember.create({
         data: {
-          employeeId: `STF-2026-${Math.floor(20000 + Math.random() * 80000)}`,
+          employeeId: `STF-2026-${crypto.randomInt(20000, 100000)}`,
           name: 'Promoted User',
           role: 'RECEPTIONIST',
           designation: 'Reception Officer',

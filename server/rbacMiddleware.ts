@@ -203,6 +203,101 @@ export function registerActiveUserChecker(fn: ActiveUserChecker) {
   activeUserChecker = fn;
 }
 
+export interface ExtractedCredentials {
+  type: 'none' | 'sahachara' | 'supabase';
+  token?: string;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+const NATIVE_SAHA_TOKEN_PATTERN = /^sah_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+const SUPABASE_JWT_PATTERN = /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+/**
+ * Validates the Authorization header structure and extracts the credentials.
+ * Ensures malformed, unsupported, or ambiguous headers fail closed.
+ */
+export function extractAndValidateAuthorization(authHeader: unknown): ExtractedCredentials {
+  if (authHeader === undefined || authHeader === null || authHeader === '') {
+    return { type: 'none' };
+  }
+
+  if (Array.isArray(authHeader)) {
+    return {
+      type: 'none',
+      error: {
+        code: 'AMBIGUOUS_CREDENTIALS',
+        message: 'Authentication failed: Multiple Authorization headers provided.'
+      }
+    };
+  }
+
+  if (typeof authHeader !== 'string') {
+    return {
+      type: 'none',
+      error: {
+        code: 'MALFORMED_AUTHORIZATION_HEADER',
+        message: 'Authentication failed: Authorization header must be a string.'
+      }
+    };
+  }
+
+  const trimmed = authHeader.trim();
+  if (!trimmed) {
+    return { type: 'none' };
+  }
+
+  // Node.js joins duplicate headers with a comma
+  if (trimmed.includes(',')) {
+    return {
+      type: 'none',
+      error: {
+        code: 'AMBIGUOUS_CREDENTIALS',
+        message: 'Authentication failed: Multiple Authorization headers provided.'
+      }
+    };
+  }
+
+  const match = /^Bearer\s+(\S+)$/i.exec(trimmed);
+  if (!match) {
+    return {
+      type: 'none',
+      error: {
+        code: 'MALFORMED_AUTHORIZATION_HEADER',
+        message: 'Authentication failed: Authorization header must use the Bearer scheme with a valid token.'
+      }
+    };
+  }
+
+  const token = match[1];
+  if (token.startsWith('sah_')) {
+    if (!NATIVE_SAHA_TOKEN_PATTERN.test(token)) {
+      return {
+        type: 'none',
+        error: {
+          code: 'MALFORMED_TOKEN',
+          message: 'Authentication failed: Native session token structure is malformed.'
+        }
+      };
+    }
+    return { type: 'sahachara', token };
+  }
+
+  if (!SUPABASE_JWT_PATTERN.test(token)) {
+    return {
+      type: 'none',
+      error: {
+        code: 'MALFORMED_TOKEN',
+        message: 'Authentication failed: Bearer token is not a valid session token or JWT.'
+      }
+    };
+  }
+
+  return { type: 'supabase', token };
+}
+
 /**
  * Authentication and Identity Resolver Middleware
  * Extracts identity strictly from verified Bearer tokens.
@@ -217,124 +312,179 @@ export async function authenticateContext(req: AuthenticatedRequest, res: Respon
   req.authUserId = undefined;
   req.patientMrn = undefined;
 
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7).trim();
-    if (token.startsWith('sah_')) {
-      const verified = verifySessionToken(token);
-      if (verified.valid && verified.payload) {
-        if (isValidUserRole(verified.payload.role)) {
-          if (!activeUserChecker) {
-            return res.status(503).json({
-              success: false,
-              code: 'AUTH_SERVICE_UNAVAILABLE',
-              message: 'Authentication service is temporarily unavailable. Fail-closed security active.'
-            });
-          }
-
-          let check: ActiveUserCheckResult;
-          try {
-            check = await activeUserChecker(verified.payload.userId, verified.payload.email);
-          } catch (err: any) {
-            console.error('[authenticateContext] ActiveUserChecker threw exception:', err?.message || 'Database lookup failure');
-            return res.status(503).json({
-              success: false,
-              code: 'SERVICE_UNAVAILABLE',
-              message: 'Authentication service temporarily unavailable. Database connection could not verify active account credentials.'
-            });
-          }
-
-          // 1. Database unavailable or lookup failure -> Fail closed (HTTP 503)
-          if (check.isUnavailable) {
-            return res.status(503).json({
-              success: false,
-              code: 'SERVICE_UNAVAILABLE',
-              message: 'Authentication service temporarily unavailable. Database connection could not verify active account credentials.'
-            });
-          }
-
-          // 2. User not active, not found, missing staff, or suspended -> Fail closed (HTTP 401)
-          if (!check.isActive) {
-            let code = 'UNAUTHORIZED';
-            let message = 'Authentication failed: Account is not active.';
-            if (check.statusReason === 'not_found') {
-              code = 'USER_NOT_FOUND';
-              message = 'Authentication failed: User account does not exist or has been removed.';
-            } else if (check.statusReason === 'suspended') {
-              code = 'ACCOUNT_SUSPENDED';
-              message = 'Authentication failed: Account has been suspended. Active sessions are revoked.';
-            } else if (check.statusReason === 'archived') {
-              code = 'ACCOUNT_ARCHIVED';
-              message = 'Authentication failed: Account has been archived. Operational access is revoked.';
-            } else if (check.statusReason === 'inactive') {
-              code = 'ACCOUNT_INACTIVE';
-              message = 'Authentication failed: Account is inactive or pending activation.';
-            } else if (check.statusReason === 'missing_staff') {
-              code = 'STAFF_RECORD_REQUIRED';
-              message = 'Authentication failed: Operational staff account requires an active linked staff record.';
-            } else if (check.statusReason === 'role_mismatch') {
-              code = 'ROLE_MISMATCH';
-              message = 'Authentication failed: Account role and staff record role do not match.';
-            }
-
-            return res.status(401).json({
-              success: false,
-              code,
-              message
-            });
-          }
-
-          // 3. User is valid and active -> Apply authoritative database role
-          req.userId = verified.payload.userId;
-          req.authUserId = verified.payload.userId;
-          req.userRole = check.currentRole && isValidUserRole(check.currentRole) ? check.currentRole : verified.payload.role;
-          req.userName = verified.payload.name;
-          req.patientMrn = verified.payload.patientMrn;
-        }
+  // Detect duplicate Authorization headers in rawHeaders (RFC 7235 / HTTP smuggling prevention)
+  if (Array.isArray(req.rawHeaders)) {
+    let authCount = 0;
+    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+      if (req.rawHeaders[i].toLowerCase() === 'authorization') {
+        authCount++;
       }
-    } else {
-      const tokenVerification = await verifySupabaseToken(token);
-      if (tokenVerification.valid && tokenVerification.user) {
-        const metaRole = tokenVerification.user.user_metadata?.role;
-        if (isValidUserRole(metaRole)) {
-          if (activeUserChecker) {
-            try {
-              const check = await activeUserChecker(tokenVerification.user.id, tokenVerification.user.email);
-              if (check.isUnavailable) {
-                return res.status(503).json({
-                  success: false,
-                  code: 'SERVICE_UNAVAILABLE',
-                  message: 'Authentication service temporarily unavailable.'
-                });
-              }
-              if (!check.isActive) {
-                return res.status(401).json({
-                  success: false,
-                  code: 'UNAUTHORIZED',
-                  message: 'Account is not active.'
-                });
-              }
-              req.userRole = check.currentRole && isValidUserRole(check.currentRole) ? check.currentRole : metaRole;
-            } catch (err: any) {
-              return res.status(503).json({
-                success: false,
-                code: 'SERVICE_UNAVAILABLE',
-                message: 'Authentication service temporarily unavailable.'
-              });
-            }
-          } else {
-            req.userRole = metaRole;
-          }
-
-          req.userId = tokenVerification.user.id;
-          req.authUserId = tokenVerification.user.id;
-          req.userName = tokenVerification.user.user_metadata?.name || tokenVerification.user.email;
-        }
-      }
+    }
+    if (authCount > 1) {
+      return res.status(401).json({
+        success: false,
+        code: 'AMBIGUOUS_CREDENTIALS',
+        message: 'Authentication failed: Multiple Authorization headers provided.'
+      });
     }
   }
 
-  next();
+  const credentials = extractAndValidateAuthorization(req.headers.authorization);
+
+  if (credentials.error) {
+    return res.status(401).json({
+      success: false,
+      code: credentials.error.code,
+      message: credentials.error.message
+    });
+  }
+
+  if (credentials.type === 'none') {
+    return next();
+  }
+
+  if (credentials.type === 'sahachara' && credentials.token) {
+    const verified = verifySessionToken(credentials.token);
+    if (!verified.valid || !verified.payload) {
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_TOKEN',
+        message: `Authentication failed: ${verified.error || 'Invalid session token signature.'}`
+      });
+    }
+
+    if (!isValidUserRole(verified.payload.role)) {
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_ROLE',
+        message: 'Authentication failed: Token contains an invalid or unsupported role.'
+      });
+    }
+
+    if (!activeUserChecker) {
+      return res.status(503).json({
+        success: false,
+        code: 'AUTH_SERVICE_UNAVAILABLE',
+        message: 'Authentication service is temporarily unavailable. Fail-closed security active.'
+      });
+    }
+
+    let check: ActiveUserCheckResult;
+    try {
+      check = await activeUserChecker(verified.payload.userId, verified.payload.email);
+    } catch (err: any) {
+      console.error('[authenticateContext] ActiveUserChecker threw exception:', err?.message || 'Database lookup failure');
+      return res.status(503).json({
+        success: false,
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'Authentication service temporarily unavailable. Database connection could not verify active account credentials.'
+      });
+    }
+
+    // 1. Database unavailable or lookup failure -> Fail closed (HTTP 503)
+    if (check.isUnavailable) {
+      return res.status(503).json({
+        success: false,
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'Authentication service temporarily unavailable. Database connection could not verify active account credentials.'
+      });
+    }
+
+    // 2. User not active, not found, missing staff, or suspended -> Fail closed (HTTP 401)
+    if (!check.isActive) {
+      let code = 'UNAUTHORIZED';
+      let message = 'Authentication failed: Account is not active.';
+      if (check.statusReason === 'not_found') {
+        code = 'USER_NOT_FOUND';
+        message = 'Authentication failed: User account does not exist or has been removed.';
+      } else if (check.statusReason === 'suspended') {
+        code = 'ACCOUNT_SUSPENDED';
+        message = 'Authentication failed: Account has been suspended. Active sessions are revoked.';
+      } else if (check.statusReason === 'archived') {
+        code = 'ACCOUNT_ARCHIVED';
+        message = 'Authentication failed: Account has been archived. Operational access is revoked.';
+      } else if (check.statusReason === 'inactive') {
+        code = 'ACCOUNT_INACTIVE';
+        message = 'Authentication failed: Account is inactive or pending activation.';
+      } else if (check.statusReason === 'missing_staff') {
+        code = 'STAFF_RECORD_REQUIRED';
+        message = 'Authentication failed: Operational staff account requires an active linked staff record.';
+      } else if (check.statusReason === 'role_mismatch') {
+        code = 'ROLE_MISMATCH';
+        message = 'Authentication failed: Account role and staff record role do not match.';
+      }
+
+      return res.status(401).json({
+        success: false,
+        code,
+        message
+      });
+    }
+
+    // 3. User is valid and active -> Apply authoritative database role
+    req.userId = verified.payload.userId;
+    req.authUserId = verified.payload.userId;
+    req.userRole = check.currentRole && isValidUserRole(check.currentRole) ? check.currentRole : verified.payload.role;
+    req.userName = verified.payload.name;
+    req.patientMrn = verified.payload.patientMrn;
+    return next();
+  }
+
+  if (credentials.type === 'supabase' && credentials.token) {
+    const tokenVerification = await verifySupabaseToken(credentials.token);
+    if (!tokenVerification.valid || !tokenVerification.user) {
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_TOKEN',
+        message: `Authentication failed: ${tokenVerification.error || 'Invalid or expired Supabase token.'}`
+      });
+    }
+
+    const metaRole = tokenVerification.user.user_metadata?.role;
+    if (!isValidUserRole(metaRole)) {
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_ROLE',
+        message: 'Authentication failed: Supabase user metadata does not contain a valid operational role.'
+      });
+    }
+
+    if (activeUserChecker) {
+      try {
+        const check = await activeUserChecker(tokenVerification.user.id, tokenVerification.user.email);
+        if (check.isUnavailable) {
+          return res.status(503).json({
+            success: false,
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Authentication service temporarily unavailable.'
+          });
+        }
+        if (!check.isActive) {
+          return res.status(401).json({
+            success: false,
+            code: 'UNAUTHORIZED',
+            message: 'Account is not active.'
+          });
+        }
+        req.userRole = check.currentRole && isValidUserRole(check.currentRole) ? check.currentRole : metaRole;
+      } catch (err: any) {
+        return res.status(503).json({
+          success: false,
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Authentication service temporarily unavailable.'
+        });
+      }
+    } else {
+      req.userRole = metaRole;
+    }
+
+    req.userId = tokenVerification.user.id;
+    req.authUserId = tokenVerification.user.id;
+    req.userName = tokenVerification.user.user_metadata?.name || tokenVerification.user.email;
+    return next();
+  }
+
+  return next();
 }
 
 /**

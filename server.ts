@@ -10,6 +10,7 @@ import { isSupabaseServerActive } from './server/supabaseServer.ts';
 import { getSessionSecret } from './server/rbacMiddleware.ts';
 import { requestObservabilityMiddleware } from './server/telemetry/requestLogger.ts';
 import { logger } from './server/telemetry/logger.ts';
+import { spaFallbackLimiter } from './server/rateLimiter.ts';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -31,9 +32,50 @@ async function startServer() {
   const server = http.createServer(app);
   const PORT = Number(process.env.PORT) || 3000;
 
-  // Cross-Origin Resource Sharing (CORS) configured for Vercel frontend & local preview
+  // Set trust proxy for Render load-balancers (1 hop)
+  app.set('trust proxy', 1);
+
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Explicitly trusted production origins
+  const PRODUCTION_ORIGINS = [
+    'https://os.sahachara.com'
+  ];
+
+  // Local development origins (permitted in non-production environments)
+  const LOCAL_DEV_ORIGINS = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173'
+  ];
+
+  const configuredClientOrigins = process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean)
+    : [];
+
+  const configuredAppOrigins = process.env.APP_URL
+    ? process.env.APP_URL.split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean)
+    : [];
+
+  // Deduplicate and assemble allowed origins set
+  const allowedOriginsSet = new Set<string>([
+    ...PRODUCTION_ORIGINS,
+    ...(isProduction ? [] : LOCAL_DEV_ORIGINS),
+    ...configuredClientOrigins,
+    ...configuredAppOrigins
+  ]);
+
+  // Cross-Origin Resource Sharing (CORS) with explicit origin validation
   app.use(cors({
-    origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(s => s.trim()) : true,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOriginsSet.has(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS origin ${origin} not allowed by policy`), false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-user-role', 'x-user-name', 'x-patient-mrn', 'x-correlation-id', 'x-request-id'],
@@ -94,8 +136,6 @@ async function startServer() {
     });
   });
 
-  const isProduction = process.env.NODE_ENV === 'production';
-
   if (!isProduction) {
     const vite = await createViteServer({
       server: {
@@ -108,7 +148,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (_req, res) => {
+    app.get('*', spaFallbackLimiter, (_req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }

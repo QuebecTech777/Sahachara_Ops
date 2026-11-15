@@ -483,7 +483,7 @@ async function run() {
   }
 }
 
-run().catch((err) => {
-  console.error('Fatal error executing security verification suite:', err);
+run().catch(() => {
+  console.error('Fatal error executing API security inventory verification suite.');
   process.exit(1);
 });

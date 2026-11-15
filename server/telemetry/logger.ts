@@ -118,7 +118,8 @@ class AppLogger {
           process.stdout.write(jsonStr + '\n');
         }
       } else {
-        const prefix = `[${timestamp}] [${level.toUpperCase()}] [${correlationId}] ${finalMessage}`;
+        const safeMessage = finalMessage.replace(/[\r\n]+/g, ' ');
+        const prefix = `[${timestamp}] [${level.toUpperCase()}] [${correlationId}] ${safeMessage}`;
         const extra = Object.keys(sanitizedContext).length > 0 ? ' ' + JSON.stringify(sanitizedContext) : '';
         if (level === 'error') {
           console.error(prefix + extra);

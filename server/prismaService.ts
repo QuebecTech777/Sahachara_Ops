@@ -161,26 +161,24 @@ registerActiveUserChecker(async (userId: string, email?: string) => {
       }
     }
 
-    // If staff record exists, validate its status and role
-    if (staff) {
-      if (staff.isSuspended || staff.suspendedAt) {
-        return { isActive: false, statusReason: 'suspended' };
-      }
-      if (staff.archivedAt || staff.status === 'archived') {
-        return { isActive: false, statusReason: 'archived' };
-      }
-      if (staff.status === 'suspended') {
-        return { isActive: false, statusReason: 'suspended' };
-      }
-      if (staff.status !== 'active') {
-        return { isActive: false, statusReason: 'inactive' };
-      }
+    // Validate linked staff record status and role
+    if (staff.isSuspended || staff.suspendedAt) {
+      return { isActive: false, statusReason: 'suspended' };
+    }
+    if (staff.archivedAt || staff.status === 'archived') {
+      return { isActive: false, statusReason: 'archived' };
+    }
+    if (staff.status === 'suspended') {
+      return { isActive: false, statusReason: 'suspended' };
+    }
+    if (staff.status !== 'active') {
+      return { isActive: false, statusReason: 'inactive' };
+    }
 
-      // Consistency check: account role and staff role must match
-      const staffRole = validateAndNormalizeRole(staff.role);
-      if (staffRole !== userRole) {
-        return { isActive: false, statusReason: 'role_mismatch' };
-      }
+    // Consistency check: account role and staff role must match
+    const staffRole = validateAndNormalizeRole(staff.role);
+    if (staffRole !== userRole) {
+      return { isActive: false, statusReason: 'role_mismatch' };
     }
 
     return { isActive: true, currentRole: userRole };
@@ -1394,6 +1392,110 @@ export async function checkDuplicatePatients(params: {
   return matches;
 }
 
+// ============================================================================
+// STRICT SORT ALLOWLISTS & TYPE-SAFE ORDER RESOLVERS (CODEQL ALERTS #27, #28)
+// ============================================================================
+
+export const ALLOWED_PATIENT_SORT_KEYS = [
+  'createdAt',
+  'updatedAt',
+  'mrn',
+  'firstName',
+  'lastName',
+  'dob',
+  'age',
+  'status',
+  'admissionStatus'
+] as const;
+
+export type AllowedPatientSortKey = typeof ALLOWED_PATIENT_SORT_KEYS[number];
+
+export function resolvePatientSortOrder(
+  requestedSortBy?: string,
+  requestedSortOrder?: string
+): Prisma.PatientOrderByWithRelationInput {
+  const direction: 'asc' | 'desc' = requestedSortOrder?.toLowerCase().trim() === 'asc' ? 'asc' : 'desc';
+  const sanitizedKey = requestedSortBy?.trim();
+  const matchedKey = (ALLOWED_PATIENT_SORT_KEYS as readonly string[]).includes(sanitizedKey || '')
+    ? (sanitizedKey as AllowedPatientSortKey)
+    : 'createdAt';
+
+  switch (matchedKey) {
+    case 'updatedAt':
+      return { updatedAt: direction };
+    case 'mrn':
+      return { mrn: direction };
+    case 'firstName':
+      return { firstName: direction };
+    case 'lastName':
+      return { lastName: direction };
+    case 'dob':
+      return { dob: direction };
+    case 'age':
+      return { age: direction };
+    case 'status':
+      return { status: direction };
+    case 'admissionStatus':
+      return { admissionStatus: direction };
+    case 'createdAt':
+    default:
+      return { createdAt: direction };
+  }
+}
+
+export const ALLOWED_APPOINTMENT_SORT_KEYS = [
+  'dateTime',
+  'appointmentDate',
+  'createdAt',
+  'updatedAt',
+  'appointmentNumber',
+  'patientName',
+  'patientMrn',
+  'practitionerName',
+  'priority',
+  'queuePosition',
+  'status'
+] as const;
+
+export type AllowedAppointmentSortKey = typeof ALLOWED_APPOINTMENT_SORT_KEYS[number];
+
+export function resolveAppointmentSortOrder(
+  requestedSortBy?: string,
+  requestedSortOrder?: string
+): Prisma.AppointmentOrderByWithRelationInput {
+  const direction: 'asc' | 'desc' = requestedSortOrder?.toLowerCase().trim() === 'asc' ? 'asc' : 'desc';
+  const sanitizedKey = requestedSortBy?.trim();
+  const matchedKey = (ALLOWED_APPOINTMENT_SORT_KEYS as readonly string[]).includes(sanitizedKey || '')
+    ? (sanitizedKey as AllowedAppointmentSortKey)
+    : 'dateTime';
+
+  switch (matchedKey) {
+    case 'appointmentDate':
+      return { appointmentDate: direction };
+    case 'createdAt':
+      return { createdAt: direction };
+    case 'updatedAt':
+      return { updatedAt: direction };
+    case 'appointmentNumber':
+      return { appointmentNumber: direction };
+    case 'patientName':
+      return { patientName: direction };
+    case 'patientMrn':
+      return { patientMrn: direction };
+    case 'practitionerName':
+      return { practitionerName: direction };
+    case 'priority':
+      return { priority: direction };
+    case 'queuePosition':
+      return { queuePosition: direction };
+    case 'status':
+      return { status: direction };
+    case 'dateTime':
+    default:
+      return { dateTime: direction };
+  }
+}
+
 export async function dbSearchPatients(options: {
   search?: string;
   status?: string;
@@ -1411,8 +1513,6 @@ export async function dbSearchPatients(options: {
   const search = options.search?.trim();
   const status = options.status?.trim().toLowerCase();
   const admissionStatus = options.admissionStatus?.trim().toLowerCase();
-  const sortBy = options.sortBy || 'createdAt';
-  const sortOrder = options.sortOrder === 'asc' ? 'asc' : 'desc';
 
   if (isPrismaConnected) {
     try {
@@ -1446,13 +1546,14 @@ export async function dbSearchPatients(options: {
         }
       }
 
+      const orderBy = resolvePatientSortOrder(options.sortBy, options.sortOrder);
       const [total, dbPatients] = await Promise.all([
         prisma.patient.count({ where }),
         prisma.patient.findMany({
           where,
           skip,
           take: limit,
-          orderBy: { [sortBy]: sortOrder }
+          orderBy
         })
       ]);
 
@@ -2256,8 +2357,6 @@ export async function dbGetAppointments(options: {
   const page = Math.max(1, Number(options.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(options.limit) || 50));
   const skip = (page - 1) * limit;
-  const sortBy = options.sortBy || 'dateTime';
-  const sortOrder = options.sortOrder === 'asc' ? 'asc' : 'desc';
 
   if (!isPrismaConnected) {
     throw new Error('DatabaseUnavailable: Active PostgreSQL connection is required for appointments query.');
@@ -2317,13 +2416,14 @@ export async function dbGetAppointments(options: {
     ];
   }
 
+  const orderBy = resolveAppointmentSortOrder(options.sortBy, options.sortOrder);
   const [total, dbAppts] = await Promise.all([
     prisma.appointment.count({ where }),
     prisma.appointment.findMany({
       where,
       skip,
       take: limit,
-      orderBy: { [sortBy]: sortOrder }
+      orderBy
     })
   ]);
 
@@ -2490,7 +2590,7 @@ export async function dbCreateAppointment(
 
     return await tx.appointment.create({
       data: {
-        id: data.id || `apt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: data.id || `apt-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
         appointmentNumber,
         patientId: patient.id,
         patientName: `${patient.firstName} ${patient.lastName}`,
@@ -2632,7 +2732,7 @@ export async function dbCreateWalkInAppointment(
 
   const created = await prisma.appointment.create({
     data: {
-      id: data.id || `apt-walkin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: data.id || `apt-walkin-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
       appointmentNumber,
       patientId: patient.id,
       patientName: `${patient.firstName} ${patient.lastName}`,
@@ -4443,7 +4543,7 @@ export async function dbCreateInvoice(
     : (paidDec.greaterThan(0) ? 'partially_paid' : 'unpaid');
 
   const now = new Date();
-  const invoiceId = invoice.id || `inv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const invoiceId = invoice.id || `inv-${Date.now()}-${crypto.randomBytes(16).toString('hex')}`;
 
   // Run in interactive transaction to guarantee atomicity and update dispensing records
   const createdRecord = await prisma.$transaction(async (tx) => {
@@ -4791,7 +4891,7 @@ export async function dbRecordPayment(
   }
 
   const paymentNumber = await generateUniquePaymentNumber();
-  const paymentId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const paymentId = `pay-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const now = new Date();
 
   // 3. Process Transaction
@@ -5211,7 +5311,7 @@ export async function dbRequestRefund(
     const res = await tx.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('refund_seq')`;
     const seq = Number(res[0].nextval);
     const requestNumber = `REF-${year}-${String(seq).padStart(5, '0')}`;
-    const requestId = `ref-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const requestId = `ref-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 
     const created = await tx.refundRequest.create({
       data: {
@@ -5529,7 +5629,7 @@ export async function dbExecuteRefund(
     const res = await tx.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('refund_entry_seq')`;
     const seq = Number(res[0].nextval);
     const entryNumber = `RLE-${year}-${String(seq).padStart(5, '0')}`;
-    const ledgerEntryId = `rle-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const ledgerEntryId = `rle-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     const now = new Date();
 
     const createdLedgerEntry = await tx.refundLedgerEntry.create({
@@ -6336,7 +6436,7 @@ export async function dbLogAudit(
   patientMrn?: string
 ): Promise<ClinicalAuditLog> {
   const logEntry: ClinicalAuditLog = {
-    id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    id: `log-${Date.now()}-${crypto.randomInt(100, 1000)}`,
     timestamp: new Date().toISOString(),
     actor,
     role,
@@ -10246,7 +10346,7 @@ export async function dbOrderInvestigation(
     throw new Error('InvalidEncounterState: Cannot order investigations for a non-active encounter.');
   }
 
-  const orderNumber = `LAB-${new Date().getFullYear()}-${String(Math.floor(10000 + Math.random() * 90000))}`;
+  const orderNumber = `LAB-${new Date().getFullYear()}-${String(crypto.randomInt(10000, 100000))}`;
   const labOrder = await prisma.labOrder.create({
     data: {
       orderNumber,
@@ -10541,7 +10641,7 @@ export async function dbPrescribeEncounterMedication(
   }
 
   const prescribedQty = typeof data.quantity === 'number' && data.quantity > 0 ? data.quantity : 1;
-  const rxNumber = `RX-${new Date().getFullYear()}-${String(Math.floor(10000 + Math.random() * 90000))}`;
+  const rxNumber = `RX-${new Date().getFullYear()}-${String(crypto.randomInt(10000, 100000))}`;
   const prescription = await prisma.prescription.create({
     data: {
       rxNumber,
@@ -10931,7 +11031,7 @@ export async function dbCreateAyurvedicTreatmentPlan(
     throw new Error('InvalidEncounterState: Cannot create treatment plan for a non-active encounter.');
   }
 
-  const planNumber = `TP-${new Date().getFullYear()}-${String(Math.floor(10000 + Math.random() * 90000))}`;
+  const planNumber = `TP-${new Date().getFullYear()}-${String(crypto.randomInt(10000, 100000))}`;
   const plan = await prisma.treatmentPlan.create({
     data: {
       planNumber,
