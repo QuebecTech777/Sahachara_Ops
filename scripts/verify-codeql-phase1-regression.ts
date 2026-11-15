@@ -485,6 +485,26 @@ async function runPhase1RegressionSuite() {
     // Clean up created invoice
     await prisma.invoice.delete({ where: { id: testInv.id } });
 
+    // SECTION 5: Log Injection Sanitization & Terminal Safety (Alerts #175-#177)
+    console.log(`\n${BOLD}SECTION 5: Log Injection Sanitization & Terminal Safety (Alerts #175-#177)${RESET}`);
+    const crlfSample = 'Test error\r\nFORGED LOG ENTRY';
+    const sanitizedCrlf = sanitizeTerminalError(crlfSample);
+    assert(!sanitizedCrlf.includes('\r'), 'sanitizeTerminalError removes carriage return (\\r)');
+    assert(!sanitizedCrlf.includes('\n'), 'sanitizeTerminalError removes newline (\\n)');
+    assert(sanitizedCrlf === 'Test error  FORGED LOG ENTRY', 'sanitizeTerminalError replaces CRLF with space safely');
+
+    const escapeSeqSample = 'Normal message\x1b[31;1mCRITICAL INJECTION\x1b[0m\x00\x08';
+    const sanitizedEscape = sanitizeTerminalError(escapeSeqSample);
+    assert(!sanitizedEscape.includes('\x1b'), 'sanitizeTerminalError strips ANSI escape control character (\\x1b)');
+    assert(!sanitizedEscape.includes('\x00'), 'sanitizeTerminalError strips null byte (\\x00)');
+    assert(!sanitizedEscape.includes('\x08'), 'sanitizeTerminalError strips backspace (\\x08)');
+    assert(sanitizedEscape === 'Normal message[31;1mCRITICAL INJECTION[0m', 'sanitizeTerminalError neutralizes terminal escape sequences');
+
+    const errorObjSample = new Error('Database connection failed\r\nFake status: 200');
+    const sanitizedErrorObj = sanitizeTerminalError(errorObjSample);
+    assert(!sanitizedErrorObj.includes('\r') && !sanitizedErrorObj.includes('\n'), 'Error object sanitization eliminates CRLF');
+    assert(sanitizedErrorObj.startsWith('Error: Database connection failed'), 'Error object preserves diagnostic error name and message');
+
     // Cleanup seeded regression test patients
     await prisma.patient.deleteMany({
       where: { mrn: { in: ['SAH-P1-0001', 'SAH-P1-0002'] } }
@@ -509,8 +529,13 @@ async function runPhase1RegressionSuite() {
   }
 }
 
+export function sanitizeTerminalError(err: unknown): string {
+  const raw = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return raw.replace(/\r|\n/g, ' ').replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+}
+
 runPhase1RegressionSuite().catch((err) => {
-  const safeMsg = encodeURIComponent(err instanceof Error ? err.message : String(err));
+  const safeMsg = sanitizeTerminalError(err);
   console.error('\nFatal error in Phase 1 regression suite:', safeMsg);
   process.exit(1);
 });

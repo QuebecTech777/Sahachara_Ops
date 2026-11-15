@@ -483,8 +483,13 @@ async function run() {
   }
 }
 
+function sanitizeTerminalError(err: unknown): string {
+  const raw = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return raw.replace(/\r|\n/g, ' ').replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+}
+
 run().catch((err) => {
-  const safeMsg = encodeURIComponent(err instanceof Error ? err.message : String(err));
+  const safeMsg = sanitizeTerminalError(err);
   console.error('Fatal error executing security verification suite:', safeMsg);
   process.exit(1);
 });
