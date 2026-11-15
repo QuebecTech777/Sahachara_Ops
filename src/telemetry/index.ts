@@ -8,7 +8,9 @@ import { initBetterStackBrowser } from './betterStackBrowser';
  * Completely non-blocking and fail-open.
  */
 export function initFrontendTelemetry(): void {
-  // Fire and forget without blocking initial React mount
-  initNewRelicBrowser().catch(() => {});
+  // Fire and forget without blocking initial React mount; log warning on unhandled failure
+  initNewRelicBrowser().catch((err) => {
+    console.warn('[Frontend Telemetry] New Relic Browser failed to initialize:', err);
+  });
   initBetterStackBrowser();
 }

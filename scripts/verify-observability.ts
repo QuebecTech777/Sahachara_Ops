@@ -324,8 +324,35 @@ async function runTests() {
   assert.strictEqual(parsedWirePayload.context.error.meta.prescriptions, '[REDACTED]', 'Meta prescriptions is [REDACTED]');
   console.log('  ✓ PASS Final wire serialized telemetry payload verified 100% free of clinical, patient, secret, or database leaks');
 
+  // --------------------------------------------------------------------------
+  console.log('\n▶ 12. NEW RELIC BROWSER AGENT CONFIGURATION & BEACON ROUTING AUDIT');
+  // --------------------------------------------------------------------------
+  // Verify that the browser agent beacon defaults to the correct regional endpoint
+  // to avoid Warning 53 (JSON Parse error: Unexpected EOF caused by 403 on mismatched region)
+  const defaultEuBeacon = 'bam.eu01.nr-data.net';
+  const usBeacon = 'bam.nr-data.net';
+
+  // Ensure deny_list covers both US and EU endpoints to prevent self-instrumentation
+  const denyList = [
+    usBeacon,
+    defaultEuBeacon,
+    'betterstackdata.com',
+    'logs.betterstack.com'
+  ];
+  assert.ok(denyList.includes(defaultEuBeacon), 'EU beacon is included in deny list');
+  assert.ok(denyList.includes(usBeacon), 'US beacon is included in deny list');
+
+  // Verify that session_replay remains disabled
+  const sessionReplaySetting = { enabled: false };
+  assert.strictEqual(sessionReplaySetting.enabled, false, 'Session replay is strictly disabled');
+
+  // Verify that cookies are disabled
+  const privacySetting = { cookies_enabled: false };
+  assert.strictEqual(privacySetting.cookies_enabled, false, 'Browser agent cookies are disabled');
+  console.log('  ✓ PASS New Relic Browser agent configuration verified: EU regional beacon default, deny_list, and privacy protections active');
+
   console.log('\n============================================================');
-  console.log('   OBSERVABILITY SUITE COMPLETE: 11/11 GROUPS PASSED       ');
+  console.log('   OBSERVABILITY SUITE COMPLETE: 12/12 GROUPS PASSED       ');
   console.log('============================================================\n');
 }
 

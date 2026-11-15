@@ -18,12 +18,14 @@
 let agentInstance: any = null;
 
 export async function initNewRelicBrowser(): Promise<void> {
-  // Only initialize if running in browser and keys are provided
-  if (typeof window === 'undefined') return;
+  // Only initialize if running in browser, keys are provided, and not already initialized
+  if (typeof window === 'undefined' || agentInstance) return;
 
   const licenseKey = import.meta.env.VITE_NEW_RELIC_LICENSE_KEY;
   const applicationID = import.meta.env.VITE_NEW_RELIC_APPLICATION_ID;
   const accountID = import.meta.env.VITE_NEW_RELIC_ACCOUNT_ID;
+  const beacon = import.meta.env.VITE_NEW_RELIC_BEACON || 'bam.eu01.nr-data.net';
+  const errorBeacon = import.meta.env.VITE_NEW_RELIC_ERROR_BEACON || beacon;
 
   if (!licenseKey || !applicationID) {
     // Missing or disabled New Relic browser configuration — fail open safely
@@ -37,7 +39,14 @@ export async function initNewRelicBrowser(): Promise<void> {
       init: {
         distributed_tracing: { enabled: true },
         ajax: {
-          deny_list: ['bam.nr-data.net', 'betterstackdata.com', 'logs.betterstack.com']
+          deny_list: [
+            'bam.nr-data.net',
+            'bam.eu01.nr-data.net',
+            beacon,
+            errorBeacon,
+            'betterstackdata.com',
+            'logs.betterstack.com'
+          ]
         },
         privacy: {
           cookies_enabled: false
@@ -47,8 +56,8 @@ export async function initNewRelicBrowser(): Promise<void> {
         }
       },
       info: {
-        beacon: 'bam.nr-data.net',
-        errorBeacon: 'bam.nr-data.net',
+        beacon,
+        errorBeacon,
         licenseKey,
         applicationID,
         sa: 1
