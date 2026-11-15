@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { Prisma, DepartmentDiscipline, AssignmentStatus } from '@prisma/client';
 import { hospitalStore } from './dataStore.ts';
 import {
@@ -222,22 +222,30 @@ apiRouter.use(authenticateContext as any);
 
 // Authenticate staff user (Strictly requires @sahachara.com email)
 apiRouter.post('/auth/login', async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  const result = await authenticateStaffUser(email, password);
-  if (!result.success) {
-    return res.status(401).json(result);
+  try {
+    const { email, password } = req.body || {};
+    const result = await authenticateStaffUser(email, password);
+    if (!result.success) {
+      return res.status(401).json(result);
+    }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'Authentication service encountered an unexpected error.' });
   }
-  res.json(result);
 });
 
 // Activate new staff member account via security PIN and set password
 apiRouter.post('/auth/activate', async (req: Request, res: Response) => {
-  const { email, pin, newPassword } = req.body;
-  const result = await activateStaffAccount(email, pin, newPassword);
-  if (!result.success) {
-    return res.status(400).json(result);
+  try {
+    const { email, pin, newPassword } = req.body || {};
+    const result = await activateStaffAccount(email, pin, newPassword);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'Staff activation encountered an unexpected error.' });
   }
-  res.json(result);
 });
 
 // Verify active session token and return authenticated user identity
@@ -635,9 +643,13 @@ apiRouter.get('/departments/:id/staff', requireRole(VALID_USER_ROLES as unknown 
 // ==========================================
 // 1. OVERVIEW & METRICS (OverviewController)
 // ==========================================
-apiRouter.get('/overview', requireRole(VALID_USER_ROLES as unknown as UserRole[]), async (_req: Request, res: Response) => {
-  const metrics = await dbGetOverviewMetrics();
-  res.json({ success: true, data: metrics });
+apiRouter.get('/overview', requireRole(VALID_USER_ROLES as unknown as UserRole[]), async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const metrics = await dbGetOverviewMetrics();
+    res.json({ success: true, data: metrics });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ==========================================
@@ -645,43 +657,47 @@ apiRouter.get('/overview', requireRole(VALID_USER_ROLES as unknown as UserRole[]
 // ==========================================
 
 // Search & list patients with pagination, filtering, and role-based access
-apiRouter.get('/patients', requirePermission(CLINICAL_PERMISSIONS.PATIENT_READ), async (req: AuthenticatedRequest, res: Response) => {
-  const userRole = req.userRole;
-  const patientMrn = req.patientMrn;
-  const { search, status, admissionStatus, page, limit, sortBy, sortOrder } = req.query;
+apiRouter.get('/patients', requirePermission(CLINICAL_PERMISSIONS.PATIENT_READ), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userRole = req.userRole;
+    const patientMrn = req.patientMrn;
+    const { search, status, admissionStatus, page, limit, sortBy, sortOrder } = req.query;
 
-  // If query parameters or pagination are requested
-  if (
-    search !== undefined ||
-    status !== undefined ||
-    admissionStatus !== undefined ||
-    page !== undefined ||
-    limit !== undefined ||
-    sortBy !== undefined
-  ) {
-    const searchResults = await dbSearchPatients({
-      search: search ? String(search) : undefined,
-      status: status ? String(status) : undefined,
-      admissionStatus: admissionStatus ? String(admissionStatus) : undefined,
-      page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 50,
-      sortBy: sortBy ? String(sortBy) : 'createdAt',
-      sortOrder: (sortOrder === 'asc' || sortOrder === 'desc') ? sortOrder : 'desc',
-      userRole
-    });
-    return res.json({
-      success: true,
-      data: searchResults.patients,
-      total: searchResults.total,
-      page: searchResults.page,
-      limit: searchResults.limit,
-      totalPages: searchResults.totalPages
-    });
+    // If query parameters or pagination are requested
+    if (
+      search !== undefined ||
+      status !== undefined ||
+      admissionStatus !== undefined ||
+      page !== undefined ||
+      limit !== undefined ||
+      sortBy !== undefined
+    ) {
+      const searchResults = await dbSearchPatients({
+        search: search ? String(search) : undefined,
+        status: status ? String(status) : undefined,
+        admissionStatus: admissionStatus ? String(admissionStatus) : undefined,
+        page: page ? Number(page) : 1,
+        limit: limit ? Number(limit) : 50,
+        sortBy: sortBy ? String(sortBy) : 'createdAt',
+        sortOrder: (sortOrder === 'asc' || sortOrder === 'desc') ? sortOrder : 'desc',
+        userRole
+      });
+      return res.json({
+        success: true,
+        data: searchResults.patients,
+        total: searchResults.total,
+        page: searchResults.page,
+        limit: searchResults.limit,
+        totalPages: searchResults.totalPages
+      });
+    }
+
+    // Base list
+    const activePatients = await dbGetPatients(userRole, patientMrn);
+    res.json({ success: true, data: activePatients, total: activePatients.length });
+  } catch (err) {
+    next(err);
   }
-
-  // Base list
-  const activePatients = await dbGetPatients(userRole, patientMrn);
-  res.json({ success: true, data: activePatients, total: activePatients.length });
 });
 
 // Duplicate patient detection endpoint
@@ -2497,158 +2513,166 @@ apiRouter.get('/pharmacy/prescriptions/queue', requirePermission(CLINICAL_PERMIS
   res.json({ success: true, data: queue });
 });
 
-apiRouter.post('/pharmacy/prescriptions', requirePermission(CLINICAL_PERMISSIONS.RX_CREATE), async (req: AuthenticatedRequest, res: Response) => {
-  const role = req.userRole;
-  if (role !== 'DOCTOR' && role !== 'VAIDYA') {
-    return res.status(403).json({
-      success: false,
-      code: 'CLINICAL_AUTHORITY_REQUIRED',
-      message: 'Prescriptions can only be authored by DOCTOR or VAIDYA within their respective clinical discipline.'
-    });
-  }
-
-  const body = req.body;
-  const medName = body.medicationName;
-  if (!medName || !medName.trim()) {
-    return res.status(400).json({ success: false, code: 'MEDICATION_NAME_REQUIRED', message: 'Medication name is required.' });
-  }
-
-  // Cross-discipline restriction
-  if (role === 'DOCTOR' && isAyurvedicMedication(medName, body.category)) {
-    return res.status(403).json({
-      success: false,
-      code: 'CLINICAL_DISCIPLINE_MISMATCH',
-      message: 'Clinical Discipline Mismatch: Modern medicine DOCTOR cannot prescribe Ayurvedic medications.'
-    });
-  }
-  if (role === 'VAIDYA' && isModernMedication(medName, body.category)) {
-    return res.status(403).json({
-      success: false,
-      code: 'CLINICAL_DISCIPLINE_MISMATCH',
-      message: 'Clinical Discipline Mismatch: Ayurvedic VAIDYA cannot prescribe Modern Medicine.'
-    });
-  }
-
-  if (body.encounterId) {
-    const enc = await dbGetEncounterById(body.encounterId);
-    if (!enc) {
-      return res.status(404).json({ success: false, message: 'Encounter not found' });
+apiRouter.post('/pharmacy/prescriptions', requirePermission(CLINICAL_PERMISSIONS.RX_CREATE), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const role = req.userRole;
+    if (role !== 'DOCTOR' && role !== 'VAIDYA') {
+      return res.status(403).json({
+        success: false,
+        code: 'CLINICAL_AUTHORITY_REQUIRED',
+        message: 'Prescriptions can only be authored by DOCTOR or VAIDYA within their respective clinical discipline.'
+      });
     }
-    if (role === 'DOCTOR' && enc.discipline !== 'DOCTOR') {
+
+    const body = req.body;
+    const medName = body.medicationName;
+    if (!medName || !medName.trim()) {
+      return res.status(400).json({ success: false, code: 'MEDICATION_NAME_REQUIRED', message: 'Medication name is required.' });
+    }
+
+    // Cross-discipline restriction
+    if (role === 'DOCTOR' && isAyurvedicMedication(medName, body.category)) {
       return res.status(403).json({
         success: false,
         code: 'CLINICAL_DISCIPLINE_MISMATCH',
-        message: 'Clinical Discipline Mismatch: DOCTOR cannot author prescriptions for an Ayurvedic encounter.'
+        message: 'Clinical Discipline Mismatch: Modern medicine DOCTOR cannot prescribe Ayurvedic medications.'
       });
     }
-    if (role === 'VAIDYA' && enc.discipline !== 'VAIDYA') {
+    if (role === 'VAIDYA' && isModernMedication(medName, body.category)) {
       return res.status(403).json({
         success: false,
         code: 'CLINICAL_DISCIPLINE_MISMATCH',
-        message: 'Clinical Discipline Mismatch: VAIDYA cannot author prescriptions for a Modern Medicine encounter.'
+        message: 'Clinical Discipline Mismatch: Ayurvedic VAIDYA cannot prescribe Modern Medicine.'
       });
     }
+
+    if (body.encounterId) {
+      const enc = await dbGetEncounterById(body.encounterId);
+      if (!enc) {
+        return res.status(404).json({ success: false, message: 'Encounter not found' });
+      }
+      if (role === 'DOCTOR' && enc.discipline !== 'DOCTOR') {
+        return res.status(403).json({
+          success: false,
+          code: 'CLINICAL_DISCIPLINE_MISMATCH',
+          message: 'Clinical Discipline Mismatch: DOCTOR cannot author prescriptions for an Ayurvedic encounter.'
+        });
+      }
+      if (role === 'VAIDYA' && enc.discipline !== 'VAIDYA') {
+        return res.status(403).json({
+          success: false,
+          code: 'CLINICAL_DISCIPLINE_MISMATCH',
+          message: 'Clinical Discipline Mismatch: VAIDYA cannot author prescriptions for a Modern Medicine encounter.'
+        });
+      }
+    }
+
+    const actor = req.userName || (role === 'VAIDYA' ? 'Vaidya Practitioner' : 'Dr. Attending Physician');
+    const qty = Number(body.quantity) || 1;
+
+    const newRx: Prescription = {
+      id: `rx-${Date.now()}`,
+      rxNumber: `RX-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      encounterId: body.encounterId,
+      patientId: body.patientId,
+      patientName: body.patientName || 'Walk-in Patient',
+      mrn: body.mrn || '',
+      doctorId: body.doctorId || req.userId || '',
+      doctorName: body.doctorName || actor,
+      prescribingPractitionerRole: role,
+      datePrescribed: new Date().toISOString(),
+      medicationId: body.medicationId,
+      medicationName: body.medicationName,
+      dosage: body.dosage,
+      frequency: body.frequency || 'Once Daily (OD)',
+      route: body.route || 'Oral',
+      duration: body.duration || '7 days',
+      quantity: qty,
+      instructions: body.instructions,
+      status: 'pending',
+      dispensingStatus: 'pending',
+      dispensedQuantity: 0,
+      remainingQuantity: qty,
+      pharmacyNotes: body.pharmacyNotes
+    };
+
+    const createdRx = await dbCreatePrescription(newRx);
+    await dbLogAudit(
+      createdRx.doctorName,
+      req.userRole!,
+      'Ordered E-Prescription',
+      'Medication Dispense',
+      `Prescribed ${createdRx.medicationName} ${createdRx.dosage} (Qty: ${createdRx.quantity}) for ${createdRx.patientName}`,
+      createdRx.mrn
+    );
+    res.status(201).json({ success: true, data: createdRx });
+  } catch (err) {
+    next(err);
   }
-
-  const actor = req.userName || (role === 'VAIDYA' ? 'Vaidya Practitioner' : 'Dr. Attending Physician');
-  const qty = Number(body.quantity) || 1;
-
-  const newRx: Prescription = {
-    id: `rx-${Date.now()}`,
-    rxNumber: `RX-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-    encounterId: body.encounterId,
-    patientId: body.patientId,
-    patientName: body.patientName || 'Walk-in Patient',
-    mrn: body.mrn || '',
-    doctorId: body.doctorId || req.userId || '',
-    doctorName: body.doctorName || actor,
-    prescribingPractitionerRole: role,
-    datePrescribed: new Date().toISOString(),
-    medicationId: body.medicationId,
-    medicationName: body.medicationName,
-    dosage: body.dosage,
-    frequency: body.frequency || 'Once Daily (OD)',
-    route: body.route || 'Oral',
-    duration: body.duration || '7 days',
-    quantity: qty,
-    instructions: body.instructions,
-    status: 'pending',
-    dispensingStatus: 'pending',
-    dispensedQuantity: 0,
-    remainingQuantity: qty,
-    pharmacyNotes: body.pharmacyNotes
-  };
-
-  const createdRx = await dbCreatePrescription(newRx);
-  await dbLogAudit(
-    createdRx.doctorName,
-    req.userRole!,
-    'Ordered E-Prescription',
-    'Medication Dispense',
-    `Prescribed ${createdRx.medicationName} ${createdRx.dosage} (Qty: ${createdRx.quantity}) for ${createdRx.patientName}`,
-    createdRx.mrn
-  );
-  res.status(201).json({ success: true, data: createdRx });
 });
 
-apiRouter.post('/pharmacy/prescriptions/:id/dispense', requirePermission(CLINICAL_PERMISSIONS.RX_DISPENSE), async (req: AuthenticatedRequest, res: Response) => {
-  if (req.userRole !== 'PHARMACIST') {
-    return res.status(403).json({
-      success: false,
-      code: 'PHARMACY_AUTHORITY_REQUIRED',
-      message: 'Medication dispensing is strictly restricted to licensed PHARMACIST staff.'
+apiRouter.post('/pharmacy/prescriptions/:id/dispense', requirePermission(CLINICAL_PERMISSIONS.RX_DISPENSE), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (req.userRole !== 'PHARMACIST') {
+      return res.status(403).json({
+        success: false,
+        code: 'PHARMACY_AUTHORITY_REQUIRED',
+        message: 'Medication dispensing is strictly restricted to licensed PHARMACIST staff.'
+      });
+    }
+
+    const actor = {
+      id: req.userId || 'pharm-actor-sys',
+      name: req.userName || 'Pharm. Katherine Brooks, RPh',
+      role: req.userRole || 'PHARMACIST'
+    };
+
+    const idempotencyKey =
+      (req.headers['idempotency-key'] as string) ||
+      (req.headers['x-idempotency-key'] as string) ||
+      req.body?.idempotencyKey;
+
+    const dispensePayload = {
+      ...req.body,
+      idempotencyKey: idempotencyKey || undefined
+    };
+
+    const result = await dbDispensePrescription(req.params.id, actor, req.body.pharmacyNotes, dispensePayload);
+    if (!result.success) {
+      const errorMsg = result.error || 'Dispensing failed.';
+      if (errorMsg.includes('IDEMPOTENCY_CONFLICT')) {
+        return res.status(409).json({ success: false, error: 'IDEMPOTENCY_CONFLICT', message: errorMsg });
+      }
+      let errorCode = 'DISPENSING_FAILED';
+      if (errorMsg.includes('EXPIRED_STOCK_CANNOT_BE_DISPENSED')) {
+        errorCode = 'EXPIRED_STOCK_CANNOT_BE_DISPENSED';
+      } else if (errorMsg.includes('EXCEEDS_PRESCRIBED_QUANTITY')) {
+        errorCode = 'EXCEEDS_PRESCRIBED_QUANTITY';
+      } else if (errorMsg.includes('INSUFFICIENT_STOCK')) {
+        errorCode = 'INSUFFICIENT_STOCK';
+      } else if (errorMsg.includes('already dispensed')) {
+        errorCode = 'PRESCRIPTION_ALREADY_DISPENSED';
+      }
+      return res.status(400).json({ success: false, error: errorCode, message: errorMsg });
+    }
+
+    await dbLogAudit(
+      actor.name,
+      actor.role,
+      'Dispensed Medication',
+      'Medication Dispense',
+      `Dispensed ${result.prescription?.medicationName} (${result.prescription?.rxNumber}) to ${result.prescription?.patientName}`,
+      result.prescription?.mrn
+    );
+
+    return res.json({
+      success: true,
+      data: result.prescription,
+      dispensingRecords: result.dispensingRecords
     });
+  } catch (err) {
+    next(err);
   }
-
-  const actor = {
-    id: req.userId || 'pharm-actor-sys',
-    name: req.userName || 'Pharm. Katherine Brooks, RPh',
-    role: req.userRole || 'PHARMACIST'
-  };
-
-  const idempotencyKey =
-    (req.headers['idempotency-key'] as string) ||
-    (req.headers['x-idempotency-key'] as string) ||
-    req.body?.idempotencyKey;
-
-  const dispensePayload = {
-    ...req.body,
-    idempotencyKey: idempotencyKey || undefined
-  };
-
-  const result = await dbDispensePrescription(req.params.id, actor, req.body.pharmacyNotes, dispensePayload);
-  if (!result.success) {
-    const errorMsg = result.error || 'Dispensing failed.';
-    if (errorMsg.includes('IDEMPOTENCY_CONFLICT')) {
-      return res.status(409).json({ success: false, error: 'IDEMPOTENCY_CONFLICT', message: errorMsg });
-    }
-    let errorCode = 'DISPENSING_FAILED';
-    if (errorMsg.includes('EXPIRED_STOCK_CANNOT_BE_DISPENSED')) {
-      errorCode = 'EXPIRED_STOCK_CANNOT_BE_DISPENSED';
-    } else if (errorMsg.includes('EXCEEDS_PRESCRIBED_QUANTITY')) {
-      errorCode = 'EXCEEDS_PRESCRIBED_QUANTITY';
-    } else if (errorMsg.includes('INSUFFICIENT_STOCK')) {
-      errorCode = 'INSUFFICIENT_STOCK';
-    } else if (errorMsg.includes('already dispensed')) {
-      errorCode = 'PRESCRIPTION_ALREADY_DISPENSED';
-    }
-    return res.status(400).json({ success: false, error: errorCode, message: errorMsg });
-  }
-
-  await dbLogAudit(
-    actor.name,
-    actor.role,
-    'Dispensed Medication',
-    'Medication Dispense',
-    `Dispensed ${result.prescription?.medicationName} (${result.prescription?.rxNumber}) to ${result.prescription?.patientName}`,
-    result.prescription?.mrn
-  );
-
-  return res.json({
-    success: true,
-    data: result.prescription,
-    dispensingRecords: result.dispensingRecords
-  });
 });
 
 apiRouter.patch('/pharmacy/prescriptions/:id', requireRole(['DOCTOR', 'VAIDYA', 'PHARMACIST']), async (req: AuthenticatedRequest, res: Response) => {
@@ -3066,13 +3090,18 @@ apiRouter.patch('/laboratory/:id', requirePermission(CLINICAL_PERMISSIONS.LAB_RE
 // ==========================================
 // 9. BILLING (BillingController)
 // ==========================================
-apiRouter.get('/billing', requirePermission(CLINICAL_PERMISSIONS.BILLING_READ), async (_req: AuthenticatedRequest, res: Response) => {
-  const list = await dbGetInvoices();
-  res.json({ success: true, data: list });
+apiRouter.get('/billing', requirePermission(CLINICAL_PERMISSIONS.BILLING_READ), async (_req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const list = await dbGetInvoices();
+    res.json({ success: true, data: list });
+  } catch (err) {
+    next(err);
+  }
 });
 
-apiRouter.post('/billing', requirePermission(CLINICAL_PERMISSIONS.BILLING_MANAGE), async (req: AuthenticatedRequest, res: Response) => {
-  const body = req.body;
+apiRouter.post('/billing', requirePermission(CLINICAL_PERMISSIONS.BILLING_MANAGE), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body;
 
   if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
     return res.status(400).json({
@@ -3316,6 +3345,9 @@ apiRouter.post('/billing', requirePermission(CLINICAL_PERMISSIONS.BILLING_MANAGE
     createdInvoice.mrn
   );
   res.status(201).json({ success: true, data: createdInvoice });
+  } catch (err) {
+    next(err);
+  }
 });
 
 apiRouter.patch('/billing/:id', requirePermission(CLINICAL_PERMISSIONS.BILLING_MANAGE), (req: AuthenticatedRequest, res: Response) => {
