@@ -98,10 +98,15 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           set +e
-          snyk code test --sarif-file-output=snyk-code.sarif --severity-threshold=high
-          CODE_EXIT=$?
+          snyk code test --sarif-file-output=snyk-code.sarif --severity-threshold=high 2>&1 | tee snyk-code.log
+          CODE_EXIT=${PIPESTATUS[0]}
           set -e
           echo "code_code=$CODE_EXIT" >> $GITHUB_OUTPUT
+          if grep -Fq 'SNYK-CODE-0005' snyk-code.log; then
+            echo "code_disabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "code_disabled=false" >> $GITHUB_OUTPUT
+          fi
           echo "Snyk Code scan finished with exit code: $CODE_EXIT"
 
       - name: Upload Snyk Code SARIF Results
@@ -117,6 +122,7 @@ jobs:
         run: |
           OSS_CODE="${{ steps.snyk-oss.outputs.oss_code }}"
           CODE_CODE="${{ steps.snyk-code.outputs.code_code }}"
+          CODE_DISABLED="${{ steps.snyk-code.outputs.code_disabled }}"
 
           SCAN_FAILURE=0
           OPERATIONAL_FAILURE=0
@@ -149,27 +155,31 @@ jobs:
           esac
 
           # Classify Snyk Code (SAST)
-          case "$CODE_CODE" in
-            0)
-              echo "✓ Snyk Code: No high or critical static code defects detected."
-              ;;
-            1)
-              echo "::error::Snyk Code detected high or critical application security vulnerabilities."
-              SCAN_FAILURE=1
-              ;;
-            2)
-              echo "::error::Snyk Code operational failure: Invalid CLI parameters or runtime failure."
-              OPERATIONAL_FAILURE=1
-              ;;
-            3)
-              echo "::error::Snyk Code configuration error: No supported code targets found."
-              OPERATIONAL_FAILURE=1
-              ;;
-            *)
-              echo "::error::Snyk Code service/auth error (exit code $CODE_CODE): Network failure, invalid token, or service outage."
-              OPERATIONAL_FAILURE=1
-              ;;
-          esac
+          if [ "$CODE_DISABLED" = "true" ]; then
+            echo "::warning::Snyk Code scan skipped: SNYK-CODE-0005 (Snyk Code is not enabled for this organization)."
+          else
+            case "$CODE_CODE" in
+              0)
+                echo "✓ Snyk Code: No high or critical static code defects detected."
+                ;;
+              1)
+                echo "::error::Snyk Code detected high or critical application security vulnerabilities."
+                SCAN_FAILURE=1
+                ;;
+              2)
+                echo "::error::Snyk Code operational failure: Invalid CLI parameters or runtime failure."
+                OPERATIONAL_FAILURE=1
+                ;;
+              3)
+                echo "::error::Snyk Code configuration error: No supported code targets found."
+                OPERATIONAL_FAILURE=1
+                ;;
+              *)
+                echo "::error::Snyk Code service/auth error (exit code $CODE_CODE): Network failure, invalid token, or service outage."
+                OPERATIONAL_FAILURE=1
+                ;;
+            esac
+          fi
 
           echo "=========================================================================="
           if [ "$SCAN_FAILURE" -ne 0 ]; then
@@ -182,5 +192,5 @@ jobs:
             exit 1
           fi
 
-          echo "SUCCESS: All Snyk security scans passed with zero high/critical findings."
+          echo "SUCCESS: All available Snyk security scans passed with zero high/critical findings."
           echo "=========================================================================="
