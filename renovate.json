@@ -1,0 +1,122 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Sahachara Ops dependency automation configuration",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "timezone": "Asia/Kolkata",
+  "schedule": [
+    "before 6:00am on monday"
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "commitMessagePrefix": "chore(deps): ",
+  "rebaseWhen": "auto",
+  "automerge": false,
+  "separateMajorMinor": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6:00am on the first day of the month"],
+    "commitMessageAction": "refresh lockfile"
+  },
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/backups/**",
+    "**/docs/pharmacy/**"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "vulnerability"],
+    "schedule": ["at any time"],
+    "prPriority": 10,
+    "commitMessagePrefix": "fix(deps-security): "
+  },
+  "packageRules": [
+    {
+      "description": "React and frontend ecosystem updates",
+      "matchPackagePatterns": [
+        "^react",
+        "^@types/react",
+        "^@carbon/",
+        "^recharts",
+        "^lucide-react",
+        "^motion"
+      ],
+      "groupName": "React and frontend ecosystem"
+    },
+    {
+      "description": "Vite and frontend build tooling",
+      "matchPackagePatterns": [
+        "^vite",
+        "^@vitejs/",
+        "^@tailwindcss/vite"
+      ],
+      "groupName": "Vite and frontend build tooling"
+    },
+    {
+      "description": "Express and backend ecosystem",
+      "matchPackagePatterns": [
+        "^express",
+        "^@types/express",
+        "^cors",
+        "^@types/cors",
+        "^dotenv",
+        "^bcryptjs",
+        "^@types/bcryptjs"
+      ],
+      "groupName": "Express and backend ecosystem"
+    },
+    {
+      "description": "Prisma and database infrastructure tooling",
+      "matchPackagePatterns": [
+        "^prisma",
+        "^@prisma/",
+        "^@supabase/"
+      ],
+      "groupName": "Prisma and database tooling",
+      "automerge": false
+    },
+    {
+      "description": "Observability and telemetry SDKs",
+      "matchPackagePatterns": [
+        "^newrelic",
+        "^@newrelic/",
+        "^@logtail/"
+      ],
+      "groupName": "Observability and telemetry SDKs"
+    },
+    {
+      "description": "Development, testing, and TypeScript tooling",
+      "matchPackagePatterns": [
+        "^tsx",
+        "^typescript",
+        "^@types/node"
+      ],
+      "groupName": "Testing and development tooling"
+    },
+    {
+      "description": "GitHub Actions dependencies",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "commitMessagePrefix": "ci(actions): "
+    },
+    {
+      "description": "Preserve deepmerge-ts override at or above patched version 8.0.2 to prevent prototype pollution",
+      "matchPackageNames": ["deepmerge-ts"],
+      "allowedVersions": ">=8.0.2"
+    },
+    {
+      "description": "Major updates require separate PRs and explicit maintainer review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["major-update", "breaking-change"],
+      "automerge": false
+    }
+  ]
+}
