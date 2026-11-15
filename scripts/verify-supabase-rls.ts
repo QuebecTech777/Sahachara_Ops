@@ -11,7 +11,7 @@
  * 7. Trusted backend Prisma operations compatibility
  */
 
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -38,15 +38,24 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-async function expectPermissionDenied(sqlQuery: string, description: string) {
+type TestRole = 'anon' | 'authenticated' | 'service_role';
+
+async function asRole<T>(role: TestRole, operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL ROLE ${role}`);
+    return operation(tx);
+  });
+}
+
+async function expectPermissionDenied(role: TestRole, sqlQuery: string, description: string) {
   try {
-    await prisma.$executeRawUnsafe(sqlQuery);
+    await asRole(role, (tx) => tx.$executeRawUnsafe(sqlQuery));
     assert(false, `${description} should have thrown permission denied`);
   } catch (err: any) {
     const isDenied = err.message?.includes('permission denied') || 
                      err.message?.includes('violates row-level security policy') ||
                      err.code === '42501';
-    assert(isDenied, `${description} properly denied (caught expected error)`);
+    assert(isDenied, `${description} properly denied (caught ${isDenied ? 'expected' : err.message} error)`);
   }
 }
 
@@ -82,29 +91,29 @@ async function runVerification() {
     // TEST 2: Anonymous ('anon') Role Perimeter Isolation
     // ------------------------------------------------------------------
     console.log('\n[TEST 2] Verifying PostgREST "anon" role perimeter isolation...');
-    await prisma.$executeRawUnsafe('SET ROLE anon;');
+    const expectAnonDenied = (sql: string, description: string) => expectPermissionDenied('anon', sql, description);
 
     // Operational tables must deny read to anon
-    await expectPermissionDenied('SELECT * FROM public.patients LIMIT 1;', 'anon SELECT on patients');
-    await expectPermissionDenied('SELECT * FROM public.users LIMIT 1;', 'anon SELECT on users');
-    await expectPermissionDenied('SELECT * FROM public.prescriptions LIMIT 1;', 'anon SELECT on prescriptions');
-    await expectPermissionDenied('SELECT * FROM public.invoices LIMIT 1;', 'anon SELECT on invoices');
-    await expectPermissionDenied('SELECT * FROM public.hospital_tariffs LIMIT 1;', 'anon SELECT on hospital_tariffs');
-    await expectPermissionDenied('SELECT * FROM public.therapy_sessions LIMIT 1;', 'anon SELECT on therapy_sessions');
+    await expectAnonDenied('SELECT * FROM public.patients LIMIT 1;', 'anon SELECT on patients');
+    await expectAnonDenied('SELECT * FROM public.users LIMIT 1;', 'anon SELECT on users');
+    await expectAnonDenied('SELECT * FROM public.prescriptions LIMIT 1;', 'anon SELECT on prescriptions');
+    await expectAnonDenied('SELECT * FROM public.invoices LIMIT 1;', 'anon SELECT on invoices');
+    await expectAnonDenied('SELECT * FROM public.hospital_tariffs LIMIT 1;', 'anon SELECT on hospital_tariffs');
+    await expectAnonDenied('SELECT * FROM public.therapy_sessions LIMIT 1;', 'anon SELECT on therapy_sessions');
 
     // Operational tables must deny write to anon
-    await expectPermissionDenied("INSERT INTO public.patients (\"id\", \"mrn\", \"firstName\", \"lastName\", \"gender\", \"phone\", \"status\") VALUES ('00000000-0000-0000-0000-000000000001', 'MRN-HACK', 'Hack', 'Er', 'MALE', '9999999999', 'active');", 'anon INSERT on patients');
-    await expectPermissionDenied("UPDATE public.patients SET \"firstName\" = 'Hacked';", 'anon UPDATE on patients');
-    await expectPermissionDenied("DELETE FROM public.patients WHERE true;", 'anon DELETE on patients');
+    await expectAnonDenied("INSERT INTO public.patients (\"id\", \"mrn\", \"firstName\", \"lastName\", \"gender\", \"phone\", \"status\") VALUES ('00000000-0000-0000-0000-000000000001', 'MRN-HACK', 'Hack', 'Er', 'MALE', '9999999999', 'active');", 'anon INSERT on patients');
+    await expectAnonDenied("UPDATE public.patients SET \"firstName\" = 'Hacked';", 'anon UPDATE on patients');
+    await expectAnonDenied("DELETE FROM public.patients WHERE true;", 'anon DELETE on patients');
 
     // Direct table access to hospital_profiles must be denied to anon
-    await expectPermissionDenied('SELECT * FROM public.hospital_profiles LIMIT 1;', 'anon SELECT on hospital_profiles table directly');
-    await expectPermissionDenied("UPDATE public.hospital_profiles SET \"displayName\" = 'Hacked';", 'anon UPDATE on hospital_profiles table');
-    await expectPermissionDenied("DELETE FROM public.hospital_profiles WHERE true;", 'anon DELETE on hospital_profiles table');
+    await expectAnonDenied('SELECT * FROM public.hospital_profiles LIMIT 1;', 'anon SELECT on hospital_profiles table directly');
+    await expectAnonDenied("UPDATE public.hospital_profiles SET \"displayName\" = 'Hacked';", 'anon UPDATE on hospital_profiles table');
+    await expectAnonDenied("DELETE FROM public.hospital_profiles WHERE true;", 'anon DELETE on hospital_profiles table');
 
     // Restricted view exposes approved public metadata without internal fields
     try {
-      const publicProfiles: any[] = await prisma.$queryRawUnsafe('SELECT * FROM public.public_hospital_profile;');
+      const publicProfiles: any[] = await asRole('anon', (tx) => tx.$queryRawUnsafe('SELECT * FROM public.public_hospital_profile;'));
       assert(Array.isArray(publicProfiles), 'anon SELECT on public_hospital_profile view allowed for approved public metadata');
       if (publicProfiles.length > 0) {
         const row = publicProfiles[0];
@@ -118,53 +127,56 @@ async function runVerification() {
     }
 
     // View mutations must be denied to anon
-    await expectPermissionDenied("UPDATE public.public_hospital_profile SET \"displayName\" = 'Hacked';", 'anon UPDATE on public_hospital_profile view');
-    await expectPermissionDenied("DELETE FROM public.public_hospital_profile WHERE true;", 'anon DELETE on public_hospital_profile view');
-
-    await prisma.$executeRawUnsafe('RESET ROLE;');
+    await expectAnonDenied("UPDATE public.public_hospital_profile SET \"displayName\" = 'Hacked';", 'anon UPDATE on public_hospital_profile view');
+    await expectAnonDenied("DELETE FROM public.public_hospital_profile WHERE true;", 'anon DELETE on public_hospital_profile view');
 
     // ------------------------------------------------------------------
     // TEST 3: Supabase Authenticated ('authenticated') Role Perimeter Isolation
     // ------------------------------------------------------------------
     console.log('\n[TEST 3] Verifying PostgREST "authenticated" role perimeter isolation...');
-    await prisma.$executeRawUnsafe('SET ROLE authenticated;');
+    const expectAuthenticatedDenied = (sql: string, description: string) => expectPermissionDenied('authenticated', sql, description);
 
-    await expectPermissionDenied('SELECT * FROM public.patients LIMIT 1;', 'authenticated SELECT on patients');
-    await expectPermissionDenied('SELECT * FROM public.users LIMIT 1;', 'authenticated SELECT on users');
-    await expectPermissionDenied('SELECT * FROM public.invoices LIMIT 1;', 'authenticated SELECT on invoices');
-    await expectPermissionDenied('SELECT * FROM public.prescriptions LIMIT 1;', 'authenticated SELECT on prescriptions');
-    await expectPermissionDenied('SELECT * FROM public.refund_ledger_entries LIMIT 1;', 'authenticated SELECT on refund_ledger_entries');
-    await expectPermissionDenied('SELECT * FROM public.audit_logs LIMIT 1;', 'authenticated SELECT on audit_logs');
+    await expectAuthenticatedDenied('SELECT * FROM public.patients LIMIT 1;', 'authenticated SELECT on patients');
+    await expectAuthenticatedDenied('SELECT * FROM public.users LIMIT 1;', 'authenticated SELECT on users');
+    await expectAuthenticatedDenied('SELECT * FROM public.invoices LIMIT 1;', 'authenticated SELECT on invoices');
+    await expectAuthenticatedDenied('SELECT * FROM public.prescriptions LIMIT 1;', 'authenticated SELECT on prescriptions');
+    await expectAuthenticatedDenied('SELECT * FROM public.refund_ledger_entries LIMIT 1;', 'authenticated SELECT on refund_ledger_entries');
+    await expectAuthenticatedDenied('SELECT * FROM public.audit_logs LIMIT 1;', 'authenticated SELECT on audit_logs');
 
-    await expectPermissionDenied("INSERT INTO public.appointments (\"id\", \"patientName\", \"patientMrn\", \"doctorName\", \"dateTime\", \"timeSlot\") VALUES ('00000000-0000-0000-0000-000000000001', 'Test', 'MRN-001', 'Doc', CURRENT_TIMESTAMP, '10:00');", 'authenticated INSERT on appointments');
-
-    await prisma.$executeRawUnsafe('RESET ROLE;');
+    await expectAuthenticatedDenied("INSERT INTO public.appointments (\"id\", \"patientName\", \"patientMrn\", \"doctorName\", \"dateTime\", \"timeSlot\", \"updatedAt\") VALUES ('00000000-0000-0000-0000-000000000001', 'Test', 'MRN-001', 'Doc', CURRENT_TIMESTAMP, '10:00', CURRENT_TIMESTAMP);", 'authenticated INSERT on appointments');
 
     // ------------------------------------------------------------------
     // TEST 4: Service Role ('service_role') Operational Access & Immutability
     // ------------------------------------------------------------------
     console.log('\n[TEST 4] Verifying "service_role" operational policies & immutability...');
-    await prisma.$executeRawUnsafe('SET ROLE service_role;');
+    const expectServiceDenied = (sql: string, description: string) => expectPermissionDenied('service_role', sql, description);
 
     try {
-      const patients: any[] = await prisma.$queryRawUnsafe('SELECT count(*) FROM public.patients;');
+      await asRole('service_role', (tx) => tx.$queryRawUnsafe('SELECT count(*) FROM public.patients;'));
       assert(true, 'service_role SELECT on patients permitted by policy');
     } catch (err: any) {
       assert(false, `service_role SELECT on patients failed: ${err.message}`);
     }
 
     // Verify immutability policy: audit_logs & refund_ledger_entries cannot be updated/deleted
-    await expectPermissionDenied("UPDATE public.refund_ledger_entries SET \"amount\" = 0;", 'service_role UPDATE on refund_ledger_entries blocked by immutability policy');
-    await expectPermissionDenied("DELETE FROM public.refund_ledger_entries WHERE true;", 'service_role DELETE on refund_ledger_entries blocked by immutability policy');
-    await expectPermissionDenied("UPDATE public.audit_logs SET \"action\" = 'MUTATED';", 'service_role UPDATE on audit_logs blocked by immutability policy');
-    await expectPermissionDenied("DELETE FROM public.audit_logs WHERE true;", 'service_role DELETE on audit_logs blocked by immutability policy');
-
-    await prisma.$executeRawUnsafe('RESET ROLE;');
+    await expectServiceDenied("UPDATE public.refund_ledger_entries SET \"amount\" = 0;", 'service_role UPDATE on refund_ledger_entries blocked by immutability policy');
+    await expectServiceDenied("DELETE FROM public.refund_ledger_entries WHERE true;", 'service_role DELETE on refund_ledger_entries blocked by immutability policy');
+    await expectServiceDenied("UPDATE public.audit_logs SET \"action\" = 'MUTATED';", 'service_role UPDATE on audit_logs blocked by immutability policy');
+    await expectServiceDenied("DELETE FROM public.audit_logs WHERE true;", 'service_role DELETE on audit_logs blocked by immutability policy');
 
     // ------------------------------------------------------------------
     // TEST 5: Transaction-Scoped Identity Context Isolation (No Pool Leakage)
     // ------------------------------------------------------------------
     console.log('\n[TEST 5] Verifying transaction-scoped identity context isolation...');
+
+    const roles: TestRole[] = ['anon', 'authenticated', 'service_role'];
+    const scopedRoles = await Promise.all(roles.map((role) => asRole(role, async (tx) => {
+      const result: { role: string }[] = await tx.$queryRaw`SELECT current_user AS role`;
+      return result[0].role;
+    })));
+    assert(scopedRoles.every((role, i) => role === roles[i]), 'Concurrent pooled transactions use their requested roles');
+    const connectionRole: { current: string; session: string }[] = await prisma.$queryRaw`SELECT current_user AS current, session_user AS session`;
+    assert(connectionRole[0].current === connectionRole[0].session, 'Transaction roles do not leak into the connection pool');
 
     // Context outside transaction should be null
     const initialContext: any[] = await prisma.$queryRaw`
