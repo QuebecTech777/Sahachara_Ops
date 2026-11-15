@@ -45,7 +45,10 @@ class AppLogger {
     this.isConsoleJson = process.env.LOG_FORMAT === 'json' || this.isProduction;
 
     const sourceToken = process.env.BETTER_STACK_SOURCE_TOKEN || process.env.LOGTAIL_SOURCE_TOKEN;
-    const ingestingHost = process.env.BETTER_STACK_INGESTING_HOST || 'https://in.logs.betterstack.com';
+    const rawIngestingHost = process.env.BETTER_STACK_INGESTING_HOST || process.env.LOGTAIL_INGESTING_HOST || 'https://s2837771.us-west-2a.betterstackdata.com';
+    const ingestingHost = rawIngestingHost.startsWith('http://') || rawIngestingHost.startsWith('https://')
+      ? rawIngestingHost
+      : `https://${rawIngestingHost}`;
 
     if (sourceToken) {
       try {
@@ -139,13 +142,13 @@ class AppLogger {
 
         let promise: Promise<any>;
         if (level === 'error') {
-          promise = this.logtail.error(message, betterStackPayload);
+          promise = this.logtail.error(finalMessage, betterStackPayload);
         } else if (level === 'warn') {
-          promise = this.logtail.warn(message, betterStackPayload);
+          promise = this.logtail.warn(finalMessage, betterStackPayload);
         } else if (level === 'debug') {
-          promise = this.logtail.debug(message, betterStackPayload);
+          promise = this.logtail.debug(finalMessage, betterStackPayload);
         } else {
-          promise = this.logtail.info(message, betterStackPayload);
+          promise = this.logtail.info(finalMessage, betterStackPayload);
         }
 
         // Catch promise rejection so telemetry network issues NEVER crash or reject
