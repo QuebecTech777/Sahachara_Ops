@@ -1259,6 +1259,7 @@ async function runPhase7VerificationSuite() {
 }
 
 runPhase7VerificationSuite().catch((err) => {
-  console.error('\nFatal suite execution error:', err);
+  const cleanMsg = err instanceof Error ? err.message.replace(/[\r\n]+/g, ' ') : String(err).replace(/[\r\n]+/g, ' ');
+  console.error('\nFatal suite execution error:', cleanMsg);
   process.exit(1);
 });

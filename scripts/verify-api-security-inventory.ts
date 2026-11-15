@@ -484,6 +484,7 @@ async function run() {
 }
 
 run().catch((err) => {
-  console.error('Fatal error executing security verification suite:', err);
+  const cleanMsg = err instanceof Error ? err.message.replace(/[\r\n]+/g, ' ') : String(err).replace(/[\r\n]+/g, ' ');
+  console.error('Fatal error executing security verification suite:', cleanMsg);
   process.exit(1);
 });

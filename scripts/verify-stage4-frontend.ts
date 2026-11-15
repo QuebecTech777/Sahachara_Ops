@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -317,7 +318,7 @@ async function runStage4FrontendVerification() {
   }
 
   // Create valid test department
-  const uniqueDeptCode = `DEPT${Math.floor(1000 + Math.random() * 9000)}`;
+  const uniqueDeptCode = `DEPT${crypto.randomInt(1000, 10000)}`;
   const createDeptRes = await apiFetch('/departments', {
     method: 'POST',
     role: 'ADMIN',
@@ -482,7 +483,7 @@ async function runStage4FrontendVerification() {
     'Primary remains NULL when only secondary assignments exist');
 
   // 3.2 Assignment to deactivated department is rejected with HTTP 400
-  const deactDeptCode = `INAC${Math.floor(1000 + Math.random() * 9000)}`;
+  const deactDeptCode = `INAC${crypto.randomInt(1000, 10000)}`;
   const inactDeptRes = await apiFetch('/departments', {
     method: 'POST',
     role: 'ADMIN',
@@ -502,7 +503,7 @@ async function runStage4FrontendVerification() {
   assert(inactAsg.data?.code === 'ASSIGNMENT_INELIGIBLE', 'Error code is ASSIGNMENT_INELIGIBLE on inactive department');
 
   // 3.3 Create a second department and assign as PRIMARY
-  const dept2Code = `DPTB${Math.floor(1000 + Math.random() * 9000)}`;
+  const dept2Code = `DPTB${crypto.randomInt(1000, 10000)}`;
   const dept2Res = await apiFetch('/departments', {
     method: 'POST',
     role: 'ADMIN',
@@ -545,7 +546,7 @@ async function runStage4FrontendVerification() {
   assert(changedPrimary?.id === createdDept.id, 'Primary department updated to createdDept');
 
   // 3.5 Complete assignment
-  const deptCompleteCode = `CMPL${Math.floor(1000 + Math.random() * 9000)}`;
+  const deptCompleteCode = `CMPL${crypto.randomInt(1000, 10000)}`;
   const deptCompRes = await apiFetch('/departments', {
     method: 'POST',
     role: 'ADMIN',
@@ -564,7 +565,7 @@ async function runStage4FrontendVerification() {
   assert(completeRes.data.data.status === 'completed', 'Assignment marked status === completed');
 
   // 3.6 Transfer assignment
-  const dept3Code = `DPTC${Math.floor(1000 + Math.random() * 9000)}`;
+  const dept3Code = `DPTC${crypto.randomInt(1000, 10000)}`;
   const dept3Res = await apiFetch('/departments', {
     method: 'POST',
     role: 'ADMIN',

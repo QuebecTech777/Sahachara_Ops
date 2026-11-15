@@ -333,14 +333,14 @@ async function runTests() {
   const usBeacon = 'bam.nr-data.net';
 
   // Ensure deny_list covers both US and EU endpoints to prevent self-instrumentation
-  const denyList = [
+  const denyList = new Set([
     usBeacon,
     defaultEuBeacon,
     'betterstackdata.com',
     'logs.betterstack.com'
-  ];
-  assert.ok(denyList.includes(defaultEuBeacon), 'EU beacon is included in deny list');
-  assert.ok(denyList.includes(usBeacon), 'US beacon is included in deny list');
+  ]);
+  assert.ok(denyList.has(defaultEuBeacon), 'EU beacon is included in deny list');
+  assert.ok(denyList.has(usBeacon), 'US beacon is included in deny list');
 
   // Verify that session_replay remains disabled
   const sessionReplaySetting = { enabled: false };

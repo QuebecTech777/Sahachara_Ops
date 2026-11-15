@@ -10,7 +10,6 @@
 import express, { Request, Response } from 'express';
 import http from 'http';
 import crypto from 'crypto';
-import { PrismaClient } from '@prisma/client';
 
 // Isolation Guard
 const TEST_DB_URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || 'postgresql://highflyer@localhost:5432/sahachara_ops_test_db';
@@ -25,6 +24,7 @@ import {
   ensureDefaultDatabaseUsers,
   dbSearchPatients,
   dbGetAppointments,
+  dbCreateInvoice,
   resolvePatientSortOrder,
   resolveAppointmentSortOrder,
   ALLOWED_PATIENT_SORT_KEYS,
@@ -35,7 +35,14 @@ import {
   extractAndValidateAuthorization,
   TokenPayload
 } from '../server/rbacMiddleware.ts';
-import { UserRole } from '../src/types/hospital.ts';
+import rateLimit from 'express-rate-limit';
+import {
+  spaFallbackLimiter,
+  apiGlobalLimiter,
+  authLoginLimiter,
+  therapyAuthReadLimiter,
+  therapyAuthMutateLimiter
+} from '../server/rateLimiter.ts';
 
 const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
@@ -406,6 +413,78 @@ async function runPhase1RegressionSuite() {
     });
     assert(Array.isArray(badApptSort.appointments), 'dbGetAppointments: Disallowed sort key "invoices.amount" runs safely without throwing');
 
+    // =========================================================================
+    // SECTION 3: RATE LIMITING & SECURITY HARDENING (ALERTS #21-#26, #1)
+    // =========================================================================
+    console.log(`\n${BOLD}${YELLOW}SECTION 3: Rate Limiting & High-Severity Remediations (Alerts #21-#26, #1)${RESET}`);
+
+    // 3.1 Rate Limiters Configuration & Export Validation
+    assert(typeof spaFallbackLimiter === 'function', 'spaFallbackLimiter is a valid Express middleware');
+    assert(typeof apiGlobalLimiter === 'function', 'apiGlobalLimiter is a valid Express middleware');
+    assert(typeof authLoginLimiter === 'function', 'authLoginLimiter is a valid Express middleware');
+    assert(typeof therapyAuthReadLimiter === 'function', 'therapyAuthReadLimiter is a valid Express middleware');
+    assert(typeof therapyAuthMutateLimiter === 'function', 'therapyAuthMutateLimiter is a valid Express middleware');
+
+    // 3.2 Ephemeral Rate Limiting Enforcement Test
+    const rateLimitApp = express();
+    const testLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 3,
+      standardHeaders: true,
+      legacyHeaders: false,
+      handler: (_req, res) => res.status(429).json({ success: false, code: 'RATE_LIMIT_EXCEEDED' })
+    });
+    rateLimitApp.post('/test-limit', testLimiter, (_req, res) => res.json({ ok: true }));
+    const rateLimitServer = http.createServer(rateLimitApp);
+    await new Promise<void>((resolve) => rateLimitServer.listen(0, resolve));
+    const rateLimitPort = (rateLimitServer.address() as any).port;
+
+    try {
+      const r1 = await makeHttpRequest(rateLimitPort, '/test-limit', 'POST');
+      const r2 = await makeHttpRequest(rateLimitPort, '/test-limit', 'POST');
+      const r3 = await makeHttpRequest(rateLimitPort, '/test-limit', 'POST');
+      const r4 = await makeHttpRequest(rateLimitPort, '/test-limit', 'POST');
+
+      assert(r1.status === 200, 'Rate limit test: Request 1 allowed (HTTP 200)');
+      assert(r2.status === 200, 'Rate limit test: Request 2 allowed (HTTP 200)');
+      assert(r3.status === 200, 'Rate limit test: Request 3 allowed (HTTP 200)');
+      assert(r4.status === 429, 'Rate limit test: Request 4 rejected with HTTP 429 Too Many Requests');
+      assert(r4.body.code === 'RATE_LIMIT_EXCEEDED', 'Rate limit error code is RATE_LIMIT_EXCEEDED');
+    } finally {
+      await new Promise<void>((resolve) => rateLimitServer.close(() => resolve()));
+    }
+
+    // SECTION 4: Task 2 — Invoice Identifier 16-Byte Cryptographic Entropy (Alert #20)
+    console.log(`\n${BOLD}SECTION 4: Invoice Identifier Entropy & Collision Resistance (Alert #20)${RESET}`);
+    const testInv = await dbCreateInvoice({
+      patientName: 'Regression Test Patient',
+      mrn: 'SAH-P1-0001',
+      items: [
+        {
+          id: 'item-1',
+          name: 'General Consultation',
+          description: 'Initial Clinical Examination',
+          category: 'Consultation',
+          type: 'service',
+          quantity: 1,
+          unitPrice: 500,
+          total: 500,
+          totalPrice: 500,
+          status: 'pending'
+        } as any
+      ],
+      totalAmount: 500
+    }, { id: 'admin-1', name: 'Admin', role: 'ADMIN' });
+
+    assert(Boolean(testInv && typeof testInv.id === 'string'), 'dbCreateInvoice returns created invoice with id');
+    const idRegex = /^inv-\d+-[0-9a-f]{32}$/;
+    assert(idRegex.test(testInv.id), `Generated invoice id contains 16 cryptographically random bytes (32 hex characters)`);
+    assert(Boolean(testInv.invoiceNumber && /^INV-\d{4}-\d{5}$/.test(testInv.invoiceNumber)), `PostgreSQL sequence invoiceNumber is preserved`);
+    assert(Number(testInv.totalAmount) === 500, 'Invoice monetary total is preserved (500)');
+
+    // Clean up created invoice
+    await prisma.invoice.delete({ where: { id: testInv.id } });
+
     // Cleanup seeded regression test patients
     await prisma.patient.deleteMany({
       where: { mrn: { in: ['SAH-P1-0001', 'SAH-P1-0002'] } }
@@ -431,6 +510,7 @@ async function runPhase1RegressionSuite() {
 }
 
 runPhase1RegressionSuite().catch((err) => {
-  console.error('\nFatal error in Phase 1 regression suite:', err);
+  const cleanMsg = err instanceof Error ? err.message.replace(/[\r\n]+/g, ' ') : String(err).replace(/[\r\n]+/g, ' ');
+  console.error('\nFatal error in Phase 1 regression suite:', cleanMsg);
   process.exit(1);
 });

@@ -19,6 +19,7 @@
 
 import http from 'http';
 import express from 'express';
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -195,7 +196,7 @@ async function runVerification() {
   console.log(`\n${YELLOW}▶ 3. SEEDING TEST FIXTURES IN sahachara_ops_test_db${RESET}`);
   const testPatient = await prisma.patient.create({
     data: {
-      mrn: `SAH-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+      mrn: `SAH-2026-${crypto.randomInt(10000, 100000)}`,
       firstName: 'Ramesh',
       lastName: 'Nambiar',
       phone: '+91 98450 11223',
@@ -239,7 +240,7 @@ async function runVerification() {
   // Doctor Appointment
   const doctorAppt = await prisma.appointment.create({
     data: {
-      appointmentNumber: `APT-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+      appointmentNumber: `APT-2026-${crypto.randomInt(10000, 100000)}`,
       patientId: testPatient.id,
       patientName: `${testPatient.firstName} ${testPatient.lastName}`,
       patientMrn: testPatient.mrn,
@@ -264,7 +265,7 @@ async function runVerification() {
   // Vaidya Appointment
   const vaidyaAppt = await prisma.appointment.create({
     data: {
-      appointmentNumber: `APT-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+      appointmentNumber: `APT-2026-${crypto.randomInt(10000, 100000)}`,
       patientId: testPatient.id,
       patientName: `${testPatient.firstName} ${testPatient.lastName}`,
       patientMrn: testPatient.mrn,
