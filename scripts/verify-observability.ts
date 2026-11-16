@@ -351,12 +351,127 @@ async function runTests() {
   assert.strictEqual(privacySetting.cookies_enabled, false, 'Browser agent cookies are disabled');
   console.log('  ✓ PASS New Relic Browser agent configuration verified: EU regional beacon default, deny_list, and privacy protections active');
 
+  // --------------------------------------------------------------------------
+  console.log('\n▶ 13. CONSOLE OUTPUT STRUCTURED SERIALIZATION & INJECTION DEFENSE (CWE-117)');
+  // --------------------------------------------------------------------------
+  {
+    // Helper to capture stdout and stderr writes during logger calls
+    let stdoutData = '';
+    let stderrData = '';
+    const origStdout = process.stdout.write;
+    const origStderr = process.stderr.write;
+
+    const captureOutput = (fn: () => void): { stdout: string; stderr: string } => {
+      stdoutData = '';
+      stderrData = '';
+      process.stdout.write = ((chunk: any) => {
+        stdoutData += typeof chunk === 'string' ? chunk : chunk.toString();
+        return true;
+      }) as any;
+      process.stderr.write = ((chunk: any) => {
+        stderrData += typeof chunk === 'string' ? chunk : chunk.toString();
+        return true;
+      }) as any;
+
+      try {
+        fn();
+      } finally {
+        process.stdout.write = origStdout;
+        process.stderr.write = origStderr;
+      }
+      return { stdout: stdoutData, stderr: stderrData };
+    };
+
+    // A. CRLF and Newline Injection in Message
+    const crlfPayload = 'First log entry\r\nFORGED LOG ENTRY: [2026-11-16T00:00:00Z] [ADMIN] Access granted\nAnother forged line';
+    const crlfRes = captureOutput(() => {
+      logger.info(crlfPayload);
+    });
+
+    assert.ok(crlfRes.stdout.endsWith('\n'), 'Structured output ends with terminating newline');
+    const crlfBody = crlfRes.stdout.slice(0, -1);
+    assert.strictEqual(crlfBody.includes('\r'), false, 'CRLF injection prevented: Output contains zero raw carriage returns (\\r)');
+    assert.strictEqual(crlfBody.includes('\n'), false, 'Newline injection prevented: Output contains exactly one JSON line (zero embedded newlines)');
+    const parsedCrlf = JSON.parse(crlfRes.stdout);
+    assert.strictEqual(parsedCrlf.level, 'info');
+    assert.ok(parsedCrlf.message.includes('First log entry'), 'Original message preserved safely in JSON string');
+
+    // B. ANSI Escape Sequences & Control Characters
+    const ansiPayload = 'Normal message\x1b[31;1mCRITICAL SPOOFED ERROR\x1b[0m\x00\x08';
+    const ansiRes = captureOutput(() => {
+      logger.warn(ansiPayload);
+    });
+    const ansiBody = ansiRes.stdout.slice(0, -1);
+    assert.strictEqual(ansiBody.includes('\x1b'), false, 'ANSI escape control sequence (\\x1b) is escaped/neutralized');
+    assert.strictEqual(ansiBody.includes('\x00'), false, 'Null byte (\\x00) is escaped/neutralized');
+    const parsedAnsi = JSON.parse(ansiRes.stdout);
+    assert.strictEqual(parsedAnsi.level, 'warn');
+
+    // C. Malicious Correlation ID Header Injection
+    const maliciousCorrId = 'corr-legit-001\r\nSet-Cookie: evil_session=123\nInjected-Header: true\x1b[32m';
+    const corrRes = captureOutput(() => {
+      logger.info('Safe test message', { correlationId: maliciousCorrId });
+    });
+    const parsedCorr = JSON.parse(corrRes.stdout);
+    assert.ok(!parsedCorr.correlationId.includes('\r'), 'Correlation ID contains no \\r');
+    assert.ok(!parsedCorr.correlationId.includes('\n'), 'Correlation ID contains no \\n');
+    assert.ok(!parsedCorr.correlationId.includes(':'), 'Correlation ID contains no HTTP header colons');
+    assert.ok(!parsedCorr.correlationId.includes('\x1b'), 'Correlation ID contains no ANSI escape codes');
+    assert.strictEqual(parsedCorr.correlationId, 'corr-legit-001Set-Cookieevil_session123Injected-Headertrue32m', 'Correlation ID strictly sanitized to safe character set');
+
+    // D. Nested Metadata Containing Untrusted Strings
+    const nestedUntrustedPayload = {
+      nested: {
+        deepPayload: 'nested-val\r\nINJECTED_METADATA_LINE',
+        controlCodes: 'test\x1b[33mYELLOW\x1b[0m',
+        arrayPayload: ['item1\r\nFORGED_ARRAY_ITEM', 'item2']
+      }
+    };
+    const nestedRes = captureOutput(() => {
+      logger.info('Nested metadata test', nestedUntrustedPayload);
+    });
+    const nestedBody = nestedRes.stdout.slice(0, -1);
+    assert.strictEqual(nestedBody.includes('\r'), false, 'Nested metadata contains zero raw carriage returns');
+    assert.strictEqual(nestedBody.includes('\n'), false, 'Nested metadata contains zero raw embedded newlines');
+    assert.strictEqual(nestedBody.includes('\x1b'), false, 'Nested metadata contains zero raw ANSI escape codes');
+    const parsedNested = JSON.parse(nestedRes.stdout);
+    assert.ok(parsedNested.context.nested.deepPayload.includes('nested-val'), 'Nested metadata value preserved in JSON');
+
+    // E. Normal Info, Warn, Error & Debug Routing
+    const testInfo = captureOutput(() => logger.info('Normal info log'));
+    assert.ok(testInfo.stdout.length > 0 && testInfo.stderr.length === 0, 'Info level routes to stdout');
+    const parsedInfo = JSON.parse(testInfo.stdout);
+    assert.strictEqual(parsedInfo.level, 'info');
+
+    const testWarn = captureOutput(() => logger.warn('Normal warn log'));
+    assert.ok(testWarn.stdout.length > 0 && testWarn.stderr.length === 0, 'Warn level routes to stdout');
+    const parsedWarn = JSON.parse(testWarn.stdout);
+    assert.strictEqual(parsedWarn.level, 'warn');
+
+    const testDebug = captureOutput(() => logger.debug('Normal debug log'));
+    assert.ok(testDebug.stdout.length > 0 && testDebug.stderr.length === 0, 'Debug level routes to stdout');
+    const parsedDebug = JSON.parse(testDebug.stdout);
+    assert.strictEqual(parsedDebug.level, 'debug');
+
+    const testError = captureOutput(() => logger.error('Normal error log'));
+    assert.ok(testError.stderr.length > 0 && testError.stdout.length === 0, 'Error level routes to stderr');
+    const parsedError = JSON.parse(testError.stderr);
+    assert.strictEqual(parsedError.level, 'error');
+
+    console.log('  ✓ PASS Console output strictly serialized via single-line JSON with terminating newline');
+    console.log('  ✓ PASS CRLF and newline injection payloads safely escaped without splitting log lines');
+    console.log('  ✓ PASS ANSI escape codes and terminal control sequences neutralized in output');
+    console.log('  ✓ PASS Malicious correlation IDs sanitized against HTTP header and log injection');
+    console.log('  ✓ PASS Nested metadata objects properly structured and escaped in JSON context');
+    console.log('  ✓ PASS Normal info/warn/debug routed to stdout and error routed to stderr');
+  }
+
   console.log('\n============================================================');
-  console.log('   OBSERVABILITY SUITE COMPLETE: 12/12 GROUPS PASSED       ');
+  console.log('   OBSERVABILITY SUITE COMPLETE: 13/13 GROUPS PASSED       ');
   console.log('============================================================\n');
 }
 
-runTests().catch((err) => {
-  console.error('\n❌ Observability verification failed:', err);
+runTests().catch(() => {
+  console.error('\n❌ Observability verification failed.');
   process.exit(1);
 });

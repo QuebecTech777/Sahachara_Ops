@@ -37,12 +37,10 @@ class AppLogger {
   private readonly serviceName = 'sahachara-ops-backend';
   private readonly environment: string;
   private readonly isProduction: boolean;
-  private readonly isConsoleJson: boolean;
 
   constructor() {
     this.environment = process.env.NODE_ENV || 'development';
     this.isProduction = this.environment === 'production';
-    this.isConsoleJson = process.env.LOG_FORMAT === 'json' || this.isProduction;
 
     const sourceToken = process.env.BETTER_STACK_SOURCE_TOKEN || process.env.LOGTAIL_SOURCE_TOKEN;
     const rawIngestingHost = process.env.BETTER_STACK_INGESTING_HOST || process.env.LOGTAIL_INGESTING_HOST || 'https://s2837771.us-west-2a.betterstackdata.com';
@@ -72,9 +70,9 @@ class AppLogger {
   }
 
   private getActiveCorrelationId(explicitId?: string): string {
-    if (explicitId) return sanitizeCorrelationId(explicitId);
+    if (explicitId) return sanitizeCorrelationId(explicitId) || 'system';
     const store = requestContext.getStore();
-    if (store?.correlationId) return sanitizeCorrelationId(store.correlationId);
+    if (store?.correlationId) return sanitizeCorrelationId(store.correlationId) || 'system';
     return 'system';
   }
 
@@ -105,29 +103,16 @@ class AppLogger {
   private writeLog(level: LogLevel, message: string, rawContext?: LogContext) {
     const logEntry = this.formatLogEntry(level, message, rawContext);
     const sanitizedContext = logEntry.context || {};
-    const { timestamp, correlationId } = logEntry;
+    const { correlationId } = logEntry;
     const finalMessage = logEntry.message;
 
-    // 1. Output to local stdout/stderr
+    // 1. Output to local stdout/stderr via safe structured JSON serialization (CWE-117 log injection defense)
     if (process.env.BETTER_STACK_DISABLE_CONSOLE !== 'true') {
-      if (this.isConsoleJson) {
-        const jsonStr = JSON.stringify(logEntry);
-        if (level === 'error') {
-          process.stderr.write(jsonStr + '\n');
-        } else {
-          process.stdout.write(jsonStr + '\n');
-        }
+      const jsonStr = JSON.stringify(logEntry) + '\n';
+      if (level === 'error') {
+        process.stderr.write(jsonStr);
       } else {
-        const safeMessage = finalMessage.replace(/[\r\n]+/g, ' ');
-        const prefix = `[${timestamp}] [${level.toUpperCase()}] [${correlationId}] ${safeMessage}`;
-        const extra = Object.keys(sanitizedContext).length > 0 ? ' ' + JSON.stringify(sanitizedContext) : '';
-        if (level === 'error') {
-          console.error(prefix + extra);
-        } else if (level === 'warn') {
-          console.warn(prefix + extra);
-        } else {
-          console.log(prefix + extra);
-        }
+        process.stdout.write(jsonStr);
       }
     }
 
