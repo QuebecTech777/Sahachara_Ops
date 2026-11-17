@@ -379,7 +379,7 @@ export default function App() {
         hospitalApi.getTreatments(),
         hospitalApi.getPanchakarmaCourses(),
         hospitalApi.getStaff(),
-        hospitalApi.getStockMovements()
+        curUser.role === 'PHARMACIST' ? hospitalApi.getStockMovements() : Promise.resolve<StockMovement[]>([])
       ]);
 
       setMetrics(m);

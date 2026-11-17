@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx scripts/verify-rbac.ts && tsx scripts/verify-implementation.ts && tsx scripts/verify-pharmacy-price.ts && tsx scripts/verify-patient-management.ts && tsx scripts/verify-appointments-reception.ts && tsx scripts/verify-clinical-operations.ts && tsx scripts/verify-pharmacy-dispensing.ts && tsx scripts/verify-financial-operations.ts && tsx scripts/verify-staff-management.ts && tsx scripts/verify-ayush-credentials.ts && tsx scripts/verify-staff-activation-pin.ts && tsx scripts/verify-observability.ts",
+    "test": "tsx scripts/verify-rbac.ts && tsx scripts/verify-implementation.ts && tsx scripts/verify-pharmacy-price.ts && tsx scripts/verify-patient-management.ts && tsx scripts/verify-appointments-reception.ts && tsx scripts/verify-clinical-operations.ts && tsx scripts/verify-pharmacy-dispensing.ts && tsx scripts/verify-financial-operations.ts && tsx scripts/verify-staff-management.ts && tsx scripts/verify-ayush-credentials.ts && tsx scripts/verify-staff-activation-pin.ts && tsx scripts/verify-observability.ts && tsx scripts/verify-production-auth-rbac-lifecycle.ts",
     "test:observability": "tsx scripts/verify-observability.ts",
     "test:rbac": "tsx scripts/verify-rbac.ts",
     "test:impl": "tsx scripts/verify-implementation.ts",

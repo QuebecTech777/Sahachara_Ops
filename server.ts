@@ -136,6 +136,16 @@ async function startServer() {
     });
   });
 
+  // Root informational route for backend service discovery
+  app.get('/', (_req, res) => {
+    res.json({
+      service: 'Sahachara Ops Clinical Backend Service',
+      status: 'operational',
+      frontend: 'https://os.sahachara.com',
+      health: '/health'
+    });
+  });
+
   if (!isProduction) {
     const vite = await createViteServer({
       server: {
