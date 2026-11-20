@@ -58,8 +58,8 @@ The table below documents the server-side permissions for every functional domai
 | **Laboratory Result Entry & Release** (`PATCH /api/laboratory/:id`) | Allowed | Allowed | **Allowed** | **Allowed** | Forbidden | Forbidden | Forbidden |
 | **Rate Master Tariffs Read** (`GET /api/tariffs`) | Allowed | Allowed | Allowed | Allowed | Allowed | Allowed | Allowed |
 | **Service & Tariff Management** (`POST/PUT/PATCH /api/tariffs`) | **Allowed** | **Forbidden** | **Forbidden** | **Forbidden** | **Forbidden** | **Forbidden** | **Forbidden** |
-| **Billing Ledger Read** (`GET /api/billing`) | Allowed | Allowed | Forbidden | Forbidden | Forbidden | Forbidden | Allowed |
-| **Invoice Generation & Settlement** (`POST /api/billing`) | Allowed | Allowed | Forbidden | Forbidden | Forbidden | Forbidden | Allowed |
+| **Billing Ledger Read** (`GET /api/billing`) | Allowed | Allowed | Forbidden | Forbidden | Allowed | Forbidden | Allowed |
+| **Invoice Generation & Settlement** (`POST /api/billing`) | Allowed | Allowed | Forbidden | Forbidden | Allowed | Forbidden | Allowed |
 | **RBAC Directory Read** (`GET /api/rbac/users`) | Allowed | Allowed | Forbidden | Forbidden | Forbidden | Forbidden | Forbidden |
 | **RBAC Role Assignment** (`PATCH /api/rbac/users/:id/role`) | Allowed | **Restricted\*** | Forbidden | Forbidden | Forbidden | Forbidden | Forbidden |
 | **System Security Audit Trail** (`GET /api/audit`) | Allowed | Allowed | Forbidden | Forbidden | Forbidden | Forbidden | Forbidden |

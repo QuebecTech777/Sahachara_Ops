@@ -1163,11 +1163,19 @@ async function runFinancialOperationsSuite() {
       const vaiPay = await makeRequest(baseUrl, 'POST', '/api/billing/payments', vaidyaToken, testPaymentPayload);
       assert(vaiPay.status === 403, 'VAIDYA blocked from recording payments (HTTP 403)');
 
-      // 11.3 RECEPTIONIST: strictly blocked from managing financial operations
+      // 11.3 RECEPTIONIST: authorized for invoice creation and payment collection, strictly blocked from refunds
       const recInv = await makeRequest(baseUrl, 'POST', '/api/billing/invoices', receptionistToken, testInvoicePayload);
-      assert(recInv.status === 403, 'RECEPTIONIST blocked from creating invoices (HTTP 403)');
+      assert(recInv.status === 201, 'RECEPTIONIST is authorized to create invoices (HTTP 201)');
       const recPay = await makeRequest(baseUrl, 'POST', '/api/billing/payments', receptionistToken, testPaymentPayload);
-      assert(recPay.status === 403, 'RECEPTIONIST blocked from recording payments (HTTP 403)');
+      assert(recPay.status === 201, 'RECEPTIONIST is authorized to record payments (HTTP 201)');
+      const recRefundReq = await makeRequest(baseUrl, 'POST', '/api/billing/refunds/request', receptionistToken, {
+        type: 'refund',
+        paymentId: testPaymentId1,
+        patientId: testPatient1.id,
+        amount: 50.00,
+        reason: 'Receptionist trying to request refund'
+      });
+      assert(recRefundReq.status === 403, 'RECEPTIONIST blocked from requesting refunds (HTTP 403)');
 
       // 11.4 PHARMACIST: strictly blocked from creating invoices or receiving cash payments
       const phmInv = await makeRequest(baseUrl, 'POST', '/api/billing/invoices', pharmacistToken, testInvoicePayload);

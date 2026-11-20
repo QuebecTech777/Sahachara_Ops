@@ -55,7 +55,10 @@ export const BillingInsuranceView: React.FC<BillingInsuranceViewProps> = ({
 
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
   const isAccountant = currentUser?.role === 'ACCOUNTANT';
-  const canManageFinances = isSuperAdmin || isAccountant;
+  const isReceptionist = currentUser?.role === 'RECEPTIONIST';
+  const canRecordPayment = isSuperAdmin || isAccountant || isReceptionist;
+  const canManageRefunds = isSuperAdmin || isAccountant;
+  const canManageFinances = isSuperAdmin || isAccountant || isReceptionist;
 
   const loadFinancialData = async () => {
     try {
@@ -393,7 +396,7 @@ export const BillingInsuranceView: React.FC<BillingInsuranceViewProps> = ({
           );
         }
         if (r.status === 'approved') {
-          if (!canManageFinances) {
+          if (!canManageRefunds) {
             return <span className="text-[11px] text-[#8d8d8d] italic">Awaiting Disbursement</span>;
           }
           return (
@@ -431,30 +434,32 @@ export const BillingInsuranceView: React.FC<BillingInsuranceViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {canRecordPayment && (
+            <CarbonButton
+              kind="tertiary"
+              renderIcon={CreditCard}
+              onClick={() => setIsRecordPaymentOpen(true)}
+            >
+              Record Payment
+            </CarbonButton>
+          )}
+          {canManageRefunds && (
+            <CarbonButton
+              kind="secondary"
+              renderIcon={RotateCcw}
+              onClick={() => setIsRefundModalOpen(true)}
+            >
+              Request Refund
+            </CarbonButton>
+          )}
           {canManageFinances && (
-            <>
-              <CarbonButton
-                kind="tertiary"
-                renderIcon={CreditCard}
-                onClick={() => setIsRecordPaymentOpen(true)}
-              >
-                Record Payment
-              </CarbonButton>
-              <CarbonButton
-                kind="secondary"
-                renderIcon={RotateCcw}
-                onClick={() => setIsRefundModalOpen(true)}
-              >
-                Request Refund
-              </CarbonButton>
-              <CarbonButton
-                kind="primary"
-                renderIcon={Plus}
-                onClick={() => onOpenBillingModal(patients[0])}
-              >
-                Generate Bill
-              </CarbonButton>
-            </>
+            <CarbonButton
+              kind="primary"
+              renderIcon={Plus}
+              onClick={() => onOpenBillingModal(patients[0])}
+            >
+              Generate Bill
+            </CarbonButton>
           )}
         </div>
       </div>
